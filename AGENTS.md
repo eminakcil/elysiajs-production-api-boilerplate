@@ -37,13 +37,13 @@ src/
 ├── app.ts            # composes all plugins + modules (no .listen)
 ├── index.ts          # .listen + graceful shutdown
 ├── config/env.ts     # validated env — import { env } from here, never read process.env directly
-├── db/               # schema/ (table per file), model/ (typebox per file), index.ts (client), utils.ts
+├── db/               # schema/ (table per file), model/ (typebox per file), index.ts (client), utils.ts, seed.ts
 │                      #   schema/ and model/ are symmetric: each table has a file in both, re-exported by a barrel index.ts
-├── queue/            # BullMQ: connection, defineQueue, runtime, email queue
+├── queue/            # BullMQ: connection, defineQueue, runtime, email + maintenance queues
 ├── worker.ts         # background worker entrypoint (separate process)
-├── plugins/          # cross-cutting: cors, openapi, error, logger, auth
+├── plugins/          # cross-cutting: security-headers, cors, openapi, error, logger, metrics, health, auth, rate-limit
 ├── modules/<feature>/  # index.ts (routes) · service.ts (logic) · model.ts (schemas)
-└── lib/              # errors, time, permissions, cache, mailer, logger, sanitize, ip
+└── lib/              # errors, time, permissions, cache, mailer, logger, sanitize, ip, hash, audit
 ```
 
 ## Adding a new module (recipe)
@@ -123,12 +123,23 @@ not-found-route (404) and parse (400) are handled automatically.
 
 - Two tokens: short-lived **access** (`JWT_ACCESS_EXP`, default 15m) and a
   **rotating refresh** token (`JWT_REFRESH_EXP`, default 7d) persisted in
-  `refresh_tokens`.
-- `/auth/refresh` consumes (deletes) the presented refresh token and issues a
-  new pair — reusing an old one returns 401.
+  `refresh_tokens` (only the SHA-256 **hash** is stored — see `lib/hash.ts`).
+- `/auth/refresh` rotates the presented token: it's marked `used_at` (not
+  deleted) and a new token is issued in the **same `family_id`**. Reusing an
+  already-used token is treated as theft → the whole family is revoked (401) and
+  a `security.token_reuse_detected` audit event is written. Login/register start
+  a new family; logout revokes by family.
 - **Every refresh token must carry a unique `jti`** (`crypto.randomUUID()`) when
   signed. Without it, two tokens signed for the same user in the same second are
   byte-identical and violate the `token` unique constraint.
+- **Forgotten password:** `POST /auth/password/request-reset` (enumeration-safe;
+  always 200) emails a code; `POST /auth/password/reset` verifies it, rehashes
+  the password and revokes all sessions. Logic in
+  [modules/auth/password-reset.service.ts](src/modules/auth/password-reset.service.ts).
+- Expired refresh tokens are swept hourly by the `token-cleanup` maintenance
+  queue ([queue/maintenance.queue.ts](src/queue/maintenance.queue.ts)).
+- Login equalizes timing for unknown emails (dummy argon2 verify) to avoid
+  account enumeration.
 - Route guards (macros from `plugins/auth.ts`), simplest → most flexible:
   - `{ isAuthed: true }` — any authenticated user.
   - `{ hasRole: 'admin' }` — exact role gate.
@@ -157,6 +168,31 @@ not-found-route (404) and parse (400) are handled automatically.
 - Pass structured fields as the first arg, message second:
   `logger.error({ err, jobId }, "queue job failed")`. Secrets (auth header,
   password, tokens) are redacted automatically.
+
+## Observability & hardening
+
+- **Health:** `/health` is shallow liveness (process up); `/ready` is deep
+  readiness (Postgres `SELECT 1` + Redis `PING`, 503 if down). See
+  [plugins/health.ts](src/plugins/health.ts) — point k8s liveness at `/health`,
+  readiness at `/ready`.
+- **Metrics:** `/metrics` exposes Prometheus text (default process metrics, HTTP
+  request counter + duration histogram labelled by **matched route**, queue depth
+  gauge). Unauthenticated — keep it internal. See [plugins/metrics.ts](src/plugins/metrics.ts).
+- **Security headers:** [plugins/security-headers.ts](src/plugins/security-headers.ts)
+  sets nosniff / frame-deny / referrer-policy / CORP on every response (HSTS in
+  prod) via a global `onRequest`.
+- **Request limits:** `MAX_BODY_SIZE` (413 over it) and `REQUEST_IDLE_TIMEOUT`
+  are passed to Bun.serve in [index.ts](src/index.ts).
+
+## Audit log
+
+Record security-relevant actions with `recordAudit({ action, actorId, targetType,
+targetId, metadata?, ip? })` ([lib/audit.ts](src/lib/audit.ts)) — append-only,
+best-effort (never throws, so it can't break the operation). `actor_id` is not a
+FK to users so history outlives deleted accounts. Handler-level calls capture the
+client IP; service-level calls record without it. Existing events:
+`user.created`, `user.role_changed`, `user.deleted`, `auth.password_reset`,
+`security.token_reuse_detected`.
 
 ## Caching (Redis)
 
