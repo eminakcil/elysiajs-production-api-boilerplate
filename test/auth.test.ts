@@ -85,4 +85,21 @@ describe("auth (requires a running database)", () => {
     });
     expect(afterBurn.status).toBe(401);
   });
+
+  it("rotates atomically: two concurrent refreshes yield exactly one success", async () => {
+    const email = uniqueEmail();
+    const password = "supersecret";
+    const reg = await body(
+      await json("/auth/register", "POST", { email, password }),
+    );
+    const token: string = reg.refreshToken;
+
+    // Fire the same refresh token twice at once. The conditional UPDATE makes
+    // the claim atomic, so exactly one wins (200) and the other is rejected.
+    const [a, b] = await Promise.all([
+      json("/auth/refresh", "POST", { refreshToken: token }),
+      json("/auth/refresh", "POST", { refreshToken: token }),
+    ]);
+    expect([a.status, b.status].sort()).toEqual([200, 401]);
+  });
 });
