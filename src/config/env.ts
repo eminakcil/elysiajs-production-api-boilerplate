@@ -15,6 +15,11 @@ const EnvSchema = t.Object({
 
   // Postgres connection string, e.g. postgres://user:pass@localhost:5432/app
   DATABASE_URL: t.String({ minLength: 1 }),
+  // Connection pool tuning (postgres.js). Size the pool to your DB's
+  // max_connections divided across API + worker replicas.
+  DB_POOL_MAX: t.Number({ default: 10 }),
+  DB_IDLE_TIMEOUT: t.Number({ default: 30 }), // seconds before an idle conn closes
+  DB_CONNECT_TIMEOUT: t.Number({ default: 30 }), // seconds to wait for a connection
 
   // Auth secrets — keep these long and random in production.
   JWT_SECRET: t.String({ minLength: 16 }),
@@ -30,6 +35,11 @@ const EnvSchema = t.Object({
 
   // Trust X-Forwarded-For for client IP (enable behind a proxy/load balancer).
   TRUST_PROXY: t.Boolean({ default: false }),
+
+  // Max request body size in bytes (Bun rejects larger with 413). Default 1 MiB.
+  MAX_BODY_SIZE: t.Number({ default: 1024 * 1024 }),
+  // Connection idle timeout in seconds (Bun.serve idleTimeout, max 255).
+  REQUEST_IDLE_TIMEOUT: t.Number({ default: 30 }),
 
   // Redis connection string (caching, OTP storage).
   REDIS_URL: t.String({ default: "redis://localhost:6379" }),
@@ -51,6 +61,10 @@ const EnvSchema = t.Object({
   QUEUE_DRIVER: t.Union([t.Literal("redis"), t.Literal("sync")], {
     default: "redis",
   }),
+
+  // Admin user created by `bun run db:seed` (set a real password before running).
+  SEED_ADMIN_EMAIL: t.String({ default: "admin@example.com" }),
+  SEED_ADMIN_PASSWORD: t.String({ default: "" }),
 });
 
 export type Env = typeof EnvSchema.static;

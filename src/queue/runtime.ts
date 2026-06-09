@@ -24,3 +24,21 @@ export function startWorker<T>(q: QueueDef<T>): Worker<T> {
 
   return worker;
 }
+
+/**
+ * Register a repeatable (cron-like) job that fires every `every` ms. No-op under
+ * the "sync" driver (no BullMQ queue). BullMQ dedupes by repeat key, so calling
+ * this on every worker start is safe and won't pile up schedulers.
+ */
+export async function scheduleRepeatable<T>(
+  q: QueueDef<T>,
+  data: T,
+  opts: { every: number },
+): Promise<void> {
+  if (!q.bull) return;
+  await q.bull.add(q.name, data, {
+    repeat: { every: opts.every },
+    removeOnComplete: true,
+    removeOnFail: 100,
+  });
+}

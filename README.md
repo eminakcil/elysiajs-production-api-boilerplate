@@ -1,9 +1,11 @@
 # ElysiaJS Production API Boilerplate
 
 A reusable, production-ready API starter built on **ElysiaJS + Bun**: Drizzle ORM
-(PostgreSQL), JWT auth with a permission model + email verification (OTP), Redis
-caching, a BullMQ background-job queue, SMTP email, structured logging, rate
-limiting, XSS sanitization, centralized errors, OpenAPI docs, tests, Docker and CI.
+(PostgreSQL), JWT auth with a permission model + email verification (OTP) +
+password reset + refresh-token reuse detection, Redis caching, a BullMQ
+background-job queue, SMTP email, structured logging, Prometheus metrics, an audit
+log, rate limiting, security headers, XSS sanitization, centralized errors,
+OpenAPI docs, tests, Docker and CI.
 
 ## Stack
 
@@ -15,9 +17,11 @@ limiting, XSS sanitization, centralized errors, OpenAPI docs, tests, Docker and 
 - **Email:** SMTP via nodemailer (Mailtrap-ready); logs to console in dev without creds
 - **Logging:** Pino — pretty in dev, JSON in prod (stdout → any log aggregator); `LOG_LEVEL` configurable
 - **Rate limiting:** elysia-rate-limit (Redis-backed) — per-IP and per-user, opt-in per group
-- **Auth:** Custom JWT (access + rotating refresh) + Bearer, `Bun.password` (argon2id) hashing, permission model + email verification (OTP)
+- **Auth:** Custom JWT (access + rotating refresh, hashed + family-tracked with reuse detection) + Bearer, `Bun.password` (argon2id) hashing, permission model, email verification (OTP), password reset
+- **Observability:** Prometheus `/metrics`, deep `/ready` probe, append-only audit log for sensitive actions
+- **Hardening:** security headers, request body-size limit, configurable Postgres pool
 - **Docs:** OpenAPI at `/openapi`
-- **Quality:** Biome (lint + format), `bun test`
+- **Quality:** Biome (lint + format), `bun test` (CI enforces an 80% coverage floor)
 
 ## Quick start
 
@@ -44,15 +48,15 @@ bun run worker               # processes email jobs from the queue
 
 ```
 src/
-├── index.ts          # entry point: listen + graceful shutdown
+├── index.ts          # entry point: listen (body/idle limits) + graceful shutdown
 ├── app.ts            # composed app (no listen) — imported by tests
 ├── config/env.ts     # TypeBox-validated environment (fails fast at boot)
-├── db/               # Drizzle: schema/ + model/ (per-table), client, utils
-├── plugins/          # cors, openapi, error, logger, auth, rate-limit (each named for dedupe)
+├── db/               # Drizzle: schema/ + model/ (per-table), client, utils, seed.ts
+├── plugins/          # security-headers, cors, openapi, error, logger, metrics, health, auth, rate-limit (each named)
 ├── modules/          # feature modules (auth, user) — each = controller/service/model
-├── queue/            # BullMQ email queue + worker runtime
+├── queue/            # BullMQ: email + maintenance (token-cleanup) queues, worker runtime
 ├── worker.ts         # background worker entrypoint
-└── lib/              # shared helpers (errors, time, permissions, cache, mailer, logger, sanitize, ip)
+└── lib/              # shared helpers (errors, time, permissions, cache, mailer, logger, sanitize, ip, hash, audit)
 test/                 # bun:test integration tests via app.handle()
 ```
 
@@ -71,14 +75,17 @@ queue uses an inline "sync" driver, so no worker/Redis is needed.
 | `bun run db:generate` | Generate a migration from the schema |
 | `bun run db:migrate` | Apply migrations |
 | `bun run db:push` | Push schema directly (dev convenience) |
+| `bun run db:seed` | Create/promote the admin user (`SEED_ADMIN_*`) — idempotent |
 | `bun run db:studio` | Open Drizzle Studio |
 | `bun run lint` / `lint:fix` | Lint with Biome |
 | `bun run format` | Format with Biome |
 
 ## API overview
 
-- `GET /health` — liveness check
+- `GET /health` — liveness (shallow) · `GET /ready` — readiness (deep: Postgres + Redis)
+- `GET /metrics` — Prometheus metrics (keep internal / behind ingress)
 - `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` — public
+- `POST /auth/password/request-reset` · `POST /auth/password/reset` — public (forgotten password)
 - `GET /auth/me` · `POST /auth/logout` — authenticated
 - `POST /auth/email/request-otp` · `POST /auth/email/verify` — authenticated (email verification via OTP)
 - `GET /users` · `GET /users/:id` · `PATCH`/`DELETE /users/:id` — permission-gated (self or admin; role changes admin-only)
@@ -97,6 +104,19 @@ JWT_SECRET=... JWT_REFRESH_SECRET=... docker compose -f docker-compose.prod.yml 
 
 The production image is a distroless container running a compiled binary.
 Run migrations against the database separately (see `docker-compose.prod.yml`).
+
+## Start a new project from this template
+
+1. Copy the repo (or use it as a GitHub template) and `bun install`.
+2. Rename the project: `name` in [package.json](package.json), and the API
+   `title` / `description` in [src/plugins/openapi.ts](src/plugins/openapi.ts).
+3. `cp .env.example .env` and set real values — at minimum `JWT_SECRET` and
+   `JWT_REFRESH_SECRET` (`openssl rand -hex 32`), `DATABASE_URL`, and a restricted
+   `CORS_ORIGIN` for production. Set `SEED_ADMIN_*` if you'll seed an admin.
+4. `docker compose up -d` → `bun run db:migrate` → `bun run db:seed` (optional
+   first admin) → `bun run dev`.
+5. Add your own tables under `src/db/schema/` + `src/db/model/` and features
+   under `src/modules/` following the recipe below.
 
 ## Adding a new module
 

@@ -1,11 +1,14 @@
 import { Elysia } from "elysia";
 import { env } from "@/config/env";
+import { recordAudit } from "@/lib/audit";
 import { BadRequestError, UnauthorizedError } from "@/lib/errors";
+import { clientIp } from "@/lib/ip";
 import { durationToMs } from "@/lib/time";
 import { authPlugin } from "@/plugins/auth";
 import { ipRateLimit } from "@/plugins/rate-limit";
 import { authModel } from "./model";
 import { OtpService } from "./otp.service";
+import { PasswordResetService } from "./password-reset.service";
 import { AuthService } from "./service";
 
 const REFRESH_MS = durationToMs(env.JWT_REFRESH_EXP) || durationToMs("7d");
@@ -35,12 +38,19 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
   .model(authModel)
   .post(
     "/register",
-    async ({ body, jwt, refreshJwt }) => {
+    async ({ body, jwt, refreshJwt, request, server }) => {
       const user = await AuthService.createUser(
         body.email,
         body.password,
         body.name,
       );
+      await recordAudit({
+        action: "user.created",
+        actorId: user.id,
+        targetType: "user",
+        targetId: user.id,
+        ip: clientIp(request, server),
+      });
 
       const accessToken = await jwt.sign({
         sub: user.id,
@@ -51,10 +61,12 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
         sub: user.id,
         jti: crypto.randomUUID(),
       });
+      // New login → new token family.
       await AuthService.storeRefreshToken(
         user.id,
         refreshToken,
         new Date(Date.now() + REFRESH_MS),
+        crypto.randomUUID(),
       );
 
       return { accessToken, refreshToken, user: toPublicUser(user) };
@@ -82,10 +94,12 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
         sub: user.id,
         jti: crypto.randomUUID(),
       });
+      // New login → new token family.
       await AuthService.storeRefreshToken(
         user.id,
         refreshToken,
         new Date(Date.now() + REFRESH_MS),
+        crypto.randomUUID(),
       );
 
       return { accessToken, refreshToken, user: toPublicUser(user) };
@@ -102,8 +116,9 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
       const payload = await refreshJwt.verify(body.refreshToken);
       if (!payload) throw new UnauthorizedError("Invalid refresh token");
 
-      // Rotation: invalidate the presented token (also checks DB + expiry).
-      await AuthService.consumeRefreshToken(body.refreshToken);
+      // Rotation with theft detection: marks the token used (or revokes the
+      // whole family on reuse) and returns its family id to continue the chain.
+      const used = await AuthService.useRefreshToken(body.refreshToken);
 
       const user = await AuthService.findById(payload.sub as string);
       if (!user) throw new UnauthorizedError();
@@ -117,10 +132,12 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
         sub: user.id,
         jti: crypto.randomUUID(),
       });
+      // Same family — this token descends from the original login.
       await AuthService.storeRefreshToken(
         user.id,
         refreshToken,
         new Date(Date.now() + REFRESH_MS),
+        used.familyId,
       );
 
       return { accessToken, refreshToken, user: toPublicUser(user) };
@@ -130,6 +147,35 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
       response: "tokenResponse",
       detail: {
         summary: "Exchange a refresh token for new tokens",
+        tags: ["Auth"],
+      },
+    },
+  )
+  .post(
+    "/password/request-reset",
+    async ({ body }) => {
+      // Always returns the same shape — never reveals whether the email exists.
+      await PasswordResetService.request(body.email);
+      return { sent: true };
+    },
+    {
+      body: "requestPasswordResetBody",
+      detail: {
+        summary: "Request a password-reset code by email",
+        tags: ["Auth"],
+      },
+    },
+  )
+  .post(
+    "/password/reset",
+    async ({ body }) => {
+      await PasswordResetService.reset(body.email, body.code, body.password);
+      return { reset: true };
+    },
+    {
+      body: "resetPasswordBody",
+      detail: {
+        summary: "Reset the password using an emailed code",
         tags: ["Auth"],
       },
     },
