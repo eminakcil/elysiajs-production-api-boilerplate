@@ -2,7 +2,7 @@ import { describe, expect, it } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { db } from "@/db";
 import { auditLogs } from "@/db/schema";
-import { json, registerUser } from "./helpers";
+import { body, json, registerUser } from "./helpers";
 
 const auditCount = async (action: string, actorId: string) => {
   const rows = await db
@@ -20,10 +20,12 @@ describe("audit log (requires Postgres)", () => {
 
   it("records security.token_reuse_detected when a token is replayed", async () => {
     const u = await registerUser();
-    const reg = await json("/auth/login", "POST", {
-      email: u.email,
-      password: u.password,
-    }).then((r) => r.json());
+    const reg = await body(
+      await json("/auth/login", "POST", {
+        email: u.email,
+        password: u.password,
+      }),
+    );
     const original: string = reg.refreshToken;
 
     await json("/auth/refresh", "POST", { refreshToken: original });

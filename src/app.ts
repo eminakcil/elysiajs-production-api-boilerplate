@@ -5,6 +5,7 @@ import { corsPlugin } from "./plugins/cors";
 import { errorPlugin } from "./plugins/error";
 import { healthPlugin } from "./plugins/health";
 import { loggerPlugin } from "./plugins/logger";
+import { metricsPlugin } from "./plugins/metrics";
 import { openapiPlugin } from "./plugins/openapi";
 import { securityHeadersPlugin } from "./plugins/security-headers";
 
@@ -18,6 +19,7 @@ export const app = new Elysia()
   .use(corsPlugin)
   .use(openapiPlugin)
   .use(loggerPlugin)
+  .use(metricsPlugin)
   .use(errorPlugin)
   .use(healthPlugin)
   .use(authModule)
