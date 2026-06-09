@@ -9,21 +9,26 @@ to preserve Elysia's end-to-end type safety.
 ```bash
 bun install
 cp .env.example .env          # then set real JWT secrets (openssl rand -hex 32)
-docker compose up -d          # local infra (Postgres) — the API runs on the host
+docker compose up -d          # local infra (Postgres + Redis) — the API runs on the host
 bun run db:migrate            # apply existing migrations
 bun run dev                   # http://localhost:3000 · docs at /openapi
+bun run worker                # (another terminal) processes queued jobs, e.g. email
 ```
+
+Dev tip: with `QUEUE_DRIVER=sync` (`.env`) jobs run inline and no separate worker
+is needed — handy for seeing queued email in the API's own logs.
 
 ## Commands
 
 ```bash
 bun run dev        # hot-reload dev server
-bun test           # tests (needs a running Postgres — `docker compose up -d`)
+bun run worker     # background job worker (separate process; queue=redis)
+bun test           # tests (need a running Postgres + Redis — `docker compose up -d`)
 bun run lint:fix   # Biome lint + format (run before committing)
-bun run build      # compile to ./server binary
+bun run build      # compile to ./server binary (build:worker for the worker)
 ```
 
-Database workflow: edit `src/db/schema.ts` → `bun run db:generate` → `bun run db:migrate`.
+Database workflow: edit a table in `src/db/schema/` → `bun run db:generate` → `bun run db:migrate`.
 
 ## Architecture
 
@@ -46,7 +51,7 @@ src/
 Copy `src/modules/user/` and adapt:
 
 1. **`model.ts`** — TypeBox schemas. Compose from `dbSchema` columns
-   (`src/db/model.ts`) when the shape mirrors a table. Export one object.
+   (`src/db/model/`) when the shape mirrors a table. Export one object.
 2. **`service.ts`** — `export abstract class XService` with **static** methods.
    All DB access and request-independent logic lives here. Throw the error
    classes from `lib/errors.ts` (e.g. `NotFoundError`) — don't return ad-hoc
@@ -92,7 +97,9 @@ process exits on missing/invalid values). To add a variable:
 ## Testing
 
 - Tests live in `test/` and run with `bun test`. They are **integration tests
-  that require a running Postgres** (`docker compose up -d` first).
+  that require a running Postgres + Redis** (`docker compose up -d` first). The
+  queue runs in `sync` mode and the mailer/rate-limiter are no-op/skipped in
+  tests, so no worker is needed.
 - Drive the app in-process via `app.handle(new Request(...))` (see
   `test/helpers.ts`) — don't start a real HTTP server.
 - Run a single file: `bun test test/auth.test.ts`. Filter by name: `bun test -t "logs in"`.

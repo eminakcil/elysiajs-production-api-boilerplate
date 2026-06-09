@@ -1,8 +1,9 @@
 # ElysiaJS Production API Boilerplate
 
-A reusable, production-ready API starter built on **ElysiaJS + Bun**, with
-Drizzle ORM (PostgreSQL), JWT auth, centralized error handling, OpenAPI docs,
-tests, Docker and CI.
+A reusable, production-ready API starter built on **ElysiaJS + Bun**: Drizzle ORM
+(PostgreSQL), JWT auth with a permission model + email verification (OTP), Redis
+caching, a BullMQ background-job queue, SMTP email, structured logging, rate
+limiting, XSS sanitization, centralized errors, OpenAPI docs, tests, Docker and CI.
 
 ## Stack
 
@@ -27,7 +28,7 @@ bun install
 # 2. Configure environment
 cp .env.example .env        # then edit secrets
 
-# 3. Start local infra (Postgres) — API runs on the host
+# 3. Start local infra (Postgres + Redis) — API runs on the host
 docker compose up -d
 
 # 4. Create tables
@@ -46,12 +47,12 @@ src/
 ├── index.ts          # entry point: listen + graceful shutdown
 ├── app.ts            # composed app (no listen) — imported by tests
 ├── config/env.ts     # TypeBox-validated environment (fails fast at boot)
-├── db/               # Drizzle: schema, client, drizzle-typebox models, utils
-├── plugins/          # cors, openapi, error, logger, auth (each named for dedupe)
+├── db/               # Drizzle: schema/ + model/ (per-table), client, utils
+├── plugins/          # cors, openapi, error, logger, auth, rate-limit (each named for dedupe)
 ├── modules/          # feature modules (auth, user) — each = controller/service/model
 ├── queue/            # BullMQ email queue + worker runtime
 ├── worker.ts         # background worker entrypoint
-└── lib/              # shared helpers (errors, time, cache, mailer, logger)
+└── lib/              # shared helpers (errors, time, permissions, cache, mailer, logger, sanitize, ip)
 test/                 # bun:test integration tests via app.handle()
 ```
 
@@ -65,8 +66,8 @@ queue uses an inline "sync" driver, so no worker/Redis is needed.
 | `bun run dev` | Dev server with hot reload |
 | `bun run worker` | Background job worker (email queue) |
 | `bun run start` | Run without watch |
-| `bun test` | Run tests (needs a running database) |
-| `bun run build` | Compile to a standalone `./server` binary |
+| `bun test` | Run tests (needs Postgres + Redis) |
+| `bun run build` / `build:worker` | Compile the API / worker to a standalone binary |
 | `bun run db:generate` | Generate a migration from the schema |
 | `bun run db:migrate` | Apply migrations |
 | `bun run db:push` | Push schema directly (dev convenience) |
@@ -87,10 +88,10 @@ Authenticate by sending `Authorization: Bearer <accessToken>`.
 ## Docker
 
 ```bash
-# Dev: infra only (Postgres). API runs on host via `bun run dev`.
+# Dev: infra only (Postgres + Redis). API + worker run on host via `bun run dev` / `bun run worker`.
 docker compose up -d
 
-# Full stack (API + Postgres), e.g. for staging:
+# Full stack (API + worker + Postgres + Redis), e.g. for staging:
 JWT_SECRET=... JWT_REFRESH_SECRET=... docker compose -f docker-compose.prod.yml up --build
 ```
 
