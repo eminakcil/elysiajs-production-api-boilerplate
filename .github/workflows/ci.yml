@@ -47,7 +47,7 @@ jobs:
 
       - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: latest
+          bun-version: 1.3.14
 
       - run: bun install --frozen-lockfile
 
@@ -57,8 +57,8 @@ jobs:
       - name: Migrate database
         run: bun run db:migrate
 
-      - name: Test
-        run: bun test
+      - name: Test (with coverage)
+        run: bun test --coverage
 
       - name: Build
         run: bun run build && bun run build:worker

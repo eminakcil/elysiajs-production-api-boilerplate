@@ -1,0 +1,6 @@
+# Coverage settings apply when tests run with `--coverage` (see CI).
+# The threshold is a regression guard set just below current coverage; raise it
+# as coverage improves. `bun test` without --coverage is unaffected.
+[test]
+coverageThreshold = 0.8
+coverageReporter = ["text", "lcov"]
