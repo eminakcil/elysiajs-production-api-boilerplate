@@ -18,5 +18,9 @@ export const refreshTokens = pgTable(
     expiresAt: timestamp("expires_at").notNull(),
     createdAt: timestamp("created_at").defaultNow().notNull(),
   },
-  (table) => [index("refresh_tokens_family_id_idx").on(table.familyId)],
+  (table) => [
+    index("refresh_tokens_family_id_idx").on(table.familyId),
+    // Speeds up the periodic "delete expired" maintenance sweep.
+    index("refresh_tokens_expires_at_idx").on(table.expiresAt),
+  ],
 );

@@ -1,4 +1,4 @@
-import { eq } from "drizzle-orm";
+import { eq, lt } from "drizzle-orm";
 import { db } from "@/db";
 import { refreshTokens, users } from "@/db/schema";
 import { recordAudit } from "@/lib/audit";
@@ -69,6 +69,15 @@ export abstract class AuthService {
   /** Revoke every refresh token for a user (e.g. after a password reset). */
   static async revokeAllRefreshTokens(userId: string) {
     await db.delete(refreshTokens).where(eq(refreshTokens.userId, userId));
+  }
+
+  /** Delete expired refresh tokens. Returns how many rows were removed. */
+  static async deleteExpiredRefreshTokens(): Promise<number> {
+    const deleted = await db
+      .delete(refreshTokens)
+      .where(lt(refreshTokens.expiresAt, new Date()))
+      .returning({ id: refreshTokens.id });
+    return deleted.length;
   }
 
   static async verifyCredentials(email: string, password: string) {
