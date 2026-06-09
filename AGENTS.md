@@ -32,7 +32,8 @@ src/
 ├── app.ts            # composes all plugins + modules (no .listen)
 ├── index.ts          # .listen + graceful shutdown
 ├── config/env.ts     # validated env — import { env } from here, never read process.env directly
-├── db/               # schema.ts (tables), index.ts (db client), model.ts (typebox), utils.ts
+├── db/               # schema/ (table per file), model/ (typebox per file), index.ts (client), utils.ts
+│                      #   schema/ and model/ are symmetric: each table has a file in both, re-exported by a barrel index.ts
 ├── plugins/          # cross-cutting: cors, openapi, error, logger, auth
 ├── modules/<feature>/  # index.ts (routes) · service.ts (logic) · model.ts (schemas)
 └── lib/              # errors.ts, time.ts
@@ -68,10 +69,21 @@ process exits on missing/invalid values). To add a variable:
 
 ## Database & migrations
 
+- Tables live in `src/db/schema/`, **one file per table** (or per cohesive
+  group). Add the new file, then re-export it from `src/db/schema/index.ts` and
+  register it in the `table` singleton. FKs across tables import the referenced
+  table file directly (e.g. refresh-tokens → users) — this keeps relations
+  explicit without circular module imports.
+- `src/db/model/` mirrors `src/db/schema/` one-to-one: for each new table add a
+  matching `model/<table>.ts` exporting its `<table>Columns = { insert, select }`
+  (use `spread()` from `db/utils.ts`; put column refinements like `email` format
+  here), re-export it from `model/index.ts`, and register it in `dbSchema`.
+  Feature modules compose request/response schemas from `dbSchema` — never
+  hand-redeclare columns.
 - Migrations in `drizzle/` are **committed to git** — they're part of the schema history.
-- **Never edit an already-applied migration.** Change `src/db/schema.ts`, then
-  run `bun run db:generate` to produce a new migration, and `bun run db:migrate`
-  to apply it.
+- **Never edit an already-applied migration.** Change the schema files, then run
+  `bun run db:generate` to produce a new migration, and `bun run db:migrate` to
+  apply it.
 - `bun run db:push` is for quick local iteration only — don't use it as the path
   to production schema changes.
 
@@ -130,6 +142,10 @@ not-found-route (404) and parse (400) are handled automatically.
   a drizzle-typebox schema before composing it (avoids "infinite type" errors).
 - **Errors:** throw `AppError` subclasses from services; the `error` plugin maps
   them. Don't add per-route try/catch for domain errors.
+- **Keep composition roots explicit.** `app.ts` (`.use(xModule)` per module) and
+  the `tags` list in `plugins/openapi.ts` grow one line per module by design —
+  don't auto-discover/auto-load modules. Explicit `.use()` chaining is what
+  preserves Elysia's end-to-end type inference.
 
 ## Don't
 

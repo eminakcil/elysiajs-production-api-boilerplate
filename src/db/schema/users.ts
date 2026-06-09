@@ -14,16 +14,3 @@ export const users = pgTable("users", {
     .notNull()
     .$onUpdate(() => new Date()),
 });
-
-export const refreshTokens = pgTable("refresh_tokens", {
-  id: uuid("id").defaultRandom().primaryKey(),
-  token: varchar("token", { length: 512 }).notNull().unique(),
-  userId: uuid("user_id")
-    .notNull()
-    .references(() => users.id, { onDelete: "cascade" }),
-  expiresAt: timestamp("expires_at").notNull(),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-});
-
-export const table = { users, refreshTokens } as const;
-export type Table = typeof table;
