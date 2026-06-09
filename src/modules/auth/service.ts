@@ -80,4 +80,11 @@ export abstract class AuthService {
   static async revokeRefreshToken(token: string) {
     await db.delete(refreshTokens).where(eq(refreshTokens.token, token));
   }
+
+  static async markEmailVerified(userId: string) {
+    await db
+      .update(users)
+      .set({ emailVerifiedAt: new Date() })
+      .where(eq(users.id, userId));
+  }
 }

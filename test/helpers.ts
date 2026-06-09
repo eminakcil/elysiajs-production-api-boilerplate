@@ -2,6 +2,7 @@ import { eq } from "drizzle-orm";
 import { app } from "../src/app";
 import { db } from "../src/db";
 import { users } from "../src/db/schema";
+import { mailer } from "../src/lib/mailer";
 
 /** Fire a request at the app in-process (no network) and get the Response. */
 export const api = (path: string, init?: RequestInit) =>
@@ -28,6 +29,23 @@ export const json = (
 export const body = (res: Response): Promise<any> => res.json();
 
 export const uniqueEmail = () => `user_${crypto.randomUUID()}@example.com`;
+
+const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
+
+/** Read the most recent OTP code emailed to `email` (from the dev mailer outbox). */
+export const lastOtp = (email: string): string | undefined =>
+  mailer.lastTo(email)?.text.match(/\b(\d{6})\b/)?.[1];
+
+/** Run the full email-verification flow for a user with a valid access token. */
+export async function verifyEmail(token: string, email: string) {
+  await api("/auth/email/request-otp", {
+    method: "POST",
+    headers: auth(token),
+  });
+  const code = lastOtp(email);
+  if (!code) throw new Error("no OTP code was emailed");
+  return json("/auth/email/verify", "POST", { code }, token);
+}
 
 /** Promote a user to the admin role directly in the database. */
 export const promoteToAdmin = (id: string) =>

@@ -36,7 +36,7 @@ src/
 │                      #   schema/ and model/ are symmetric: each table has a file in both, re-exported by a barrel index.ts
 ├── plugins/          # cross-cutting: cors, openapi, error, logger, auth
 ├── modules/<feature>/  # index.ts (routes) · service.ts (logic) · model.ts (schemas)
-└── lib/              # errors.ts, time.ts
+└── lib/              # errors.ts, time.ts, permissions.ts, cache.ts (Redis), mailer.ts
 ```
 
 ## Adding a new module (recipe)
@@ -126,6 +126,30 @@ not-found-route (404) and parse (400) are handled automatically.
   - `{ can: { action: '<model>:<operation>', ownParam? } }` — **permission gate**
     (preferred for resources). All add a typed `user` to the context; `can` also
     adds `scope: 'all' | 'own'`.
+  - `{ verifiedEmail: true }` — requires a verified email (checks the DB fresh).
+    Not applied to any route yet — opt in where needed.
+- **Email verification (OTP):** users start unverified (`emailVerifiedAt = null`,
+  exposed as the derived `emailVerified` boolean). `POST /auth/email/request-otp`
+  emails a 6-digit code (stored hashed in Redis, 10m TTL, 60s resend cooldown,
+  5-attempt cap); `POST /auth/email/verify` checks it and sets `emailVerifiedAt`.
+  Logic in [modules/auth/otp.service.ts](src/modules/auth/otp.service.ts).
+
+## Caching (Redis)
+
+- Bun's built-in `RedisClient` via [src/lib/cache.ts](src/lib/cache.ts) — no extra
+  dependency. Import the `cache` helper (`get/set(key,val,ttl?)/del/incr/expire/
+  exists`); it's reusable, not OTP-specific.
+- Key convention: `"<domain>:<name>:<id>"` (e.g. `otp:verify:<userId>`).
+- `REDIS_URL` env (default `redis://localhost:6379`); Redis runs in
+  `docker compose up -d`. The client is closed on graceful shutdown.
+
+## Email
+
+- [src/lib/mailer.ts](src/lib/mailer.ts) — `mailer.send({ to, subject, text, html? })`.
+  The default **transport logs to the console** (dev) and records sent mail in an
+  in-memory `outbox` (tests read it via `lastTo`). To use a real provider (SMTP /
+  Resend), swap the `transport` constant — keep the `Transport` shape so callers
+  don't change. `EMAIL_FROM` env sets the from address.
 
 ## Permissions
 

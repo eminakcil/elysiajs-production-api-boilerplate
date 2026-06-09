@@ -9,7 +9,9 @@ tests, Docker and CI.
 - **Runtime:** Bun
 - **Framework:** ElysiaJS
 - **Database:** PostgreSQL via Drizzle ORM (`drizzle-typebox` bridges schemas → validation)
-- **Auth:** Custom JWT (access + rotating refresh) + Bearer, `Bun.password` (argon2id) hashing
+- **Cache:** Redis (Bun's built-in client) — caching + OTP storage
+- **Auth:** Custom JWT (access + rotating refresh) + Bearer, `Bun.password` (argon2id) hashing, permission model + email verification (OTP)
+- **Email:** pluggable mailer (dev logs to console; wire SMTP/Resend in prod)
 - **Docs:** OpenAPI at `/openapi`
 - **Quality:** Biome (lint + format), `bun test`
 
@@ -67,7 +69,8 @@ test/                 # bun:test integration tests via app.handle()
 - `GET /health` — liveness check
 - `POST /auth/register` · `POST /auth/login` · `POST /auth/refresh` — public
 - `GET /auth/me` · `POST /auth/logout` — authenticated
-- `GET /users` · `GET /users/:id` — authenticated; `PATCH`/`DELETE /users/:id` — admin only
+- `POST /auth/email/request-otp` · `POST /auth/email/verify` — authenticated (email verification via OTP)
+- `GET /users` · `GET /users/:id` · `PATCH`/`DELETE /users/:id` — permission-gated (self or admin; role changes admin-only)
 
 Authenticate by sending `Authorization: Bearer <accessToken>`.
 

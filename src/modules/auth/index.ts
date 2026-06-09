@@ -1,9 +1,10 @@
 import { Elysia } from "elysia";
 import { env } from "../../config/env";
-import { UnauthorizedError } from "../../lib/errors";
+import { BadRequestError, UnauthorizedError } from "../../lib/errors";
 import { durationToMs } from "../../lib/time";
 import { authPlugin } from "../../plugins/auth";
 import { authModel } from "./model";
+import { OtpService } from "./otp.service";
 import { AuthService } from "./service";
 
 const REFRESH_MS = durationToMs(env.JWT_REFRESH_EXP) || durationToMs("7d");
@@ -13,7 +14,14 @@ const toPublicUser = (u: {
   email: string;
   name: string | null;
   role: "user" | "admin";
-}) => ({ id: u.id, email: u.email, name: u.name, role: u.role });
+  emailVerifiedAt: Date | null;
+}) => ({
+  id: u.id,
+  email: u.email,
+  name: u.name,
+  role: u.role,
+  emailVerified: u.emailVerifiedAt !== null,
+});
 
 /**
  * Auth controller. The Elysia instance *is* the controller (Elysia idiom).
@@ -151,6 +159,45 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
       body: "refreshBody",
       detail: {
         summary: "Revoke a refresh token",
+        tags: ["Auth"],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+  )
+  .post(
+    "/email/request-otp",
+    async ({ user }) => {
+      const current = await AuthService.findById(user.sub);
+      if (!current) throw new UnauthorizedError();
+      if (current.emailVerifiedAt)
+        throw new BadRequestError("Email already verified");
+
+      await OtpService.issue(current.id, current.email);
+      return { sent: true };
+    },
+    {
+      isAuthed: true,
+      detail: {
+        summary: "Send an email-verification OTP to the current user",
+        tags: ["Auth"],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+  )
+  .post(
+    "/email/verify",
+    async ({ user, body }) => {
+      const ok = await OtpService.verify(user.sub, body.code);
+      if (!ok) throw new BadRequestError("Invalid or expired code");
+
+      await AuthService.markEmailVerified(user.sub);
+      return { verified: true };
+    },
+    {
+      isAuthed: true,
+      body: "verifyOtpBody",
+      detail: {
+        summary: "Verify the email-verification OTP",
         tags: ["Auth"],
         security: [{ bearerAuth: [] }],
       },

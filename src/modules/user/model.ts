@@ -10,6 +10,7 @@ const publicUser = t.Object({
   email: cols.email,
   name: cols.name,
   role: cols.role,
+  emailVerified: t.Boolean(),
   createdAt: cols.createdAt,
 });
 

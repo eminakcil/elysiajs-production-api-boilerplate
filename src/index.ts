@@ -1,6 +1,7 @@
 import { app } from "./app";
 import { env } from "./config/env";
 import { queryClient } from "./db";
+import { redis } from "./lib/cache";
 
 app.listen(env.PORT, () => {
   console.log(
@@ -14,6 +15,7 @@ const shutdown = async (signal: string) => {
   console.log(`\n${signal} received — shutting down...`);
   await app.stop();
   await queryClient.end({ timeout: 5 });
+  redis.close();
   process.exit(0);
 };
 

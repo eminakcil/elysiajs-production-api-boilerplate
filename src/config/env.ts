@@ -24,6 +24,12 @@ const EnvSchema = t.Object({
 
   // Comma-separated list of allowed origins, or "*" for any.
   CORS_ORIGIN: t.String({ default: "*" }),
+
+  // Redis connection string (caching, OTP storage).
+  REDIS_URL: t.String({ default: "redis://localhost:6379" }),
+
+  // From address for outgoing email (dev log transport by default).
+  EMAIL_FROM: t.String({ default: "no-reply@example.com" }),
 });
 
 export type Env = typeof EnvSchema.static;

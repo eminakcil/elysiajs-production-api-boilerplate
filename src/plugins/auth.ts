@@ -1,7 +1,10 @@
 import { bearer } from "@elysiajs/bearer";
 import { jwt } from "@elysiajs/jwt";
+import { eq } from "drizzle-orm";
 import { Elysia } from "elysia";
 import { env } from "../config/env";
+import { db } from "../db";
+import { users } from "../db/schema";
 import { type Operation, type Role, resolveScope } from "../lib/permissions";
 
 /** Claims carried by an access token. */
@@ -92,5 +95,30 @@ export const authPlugin = new Elysia({ name: "auth" })
           return { user, scope };
         },
       };
+    },
+    /**
+     * Require a verified email. Authenticates, then checks `emailVerifiedAt` in
+     * the DB (always fresh). Not applied to any route yet — opt in per route
+     * with `{ verifiedEmail: true }`.
+     */
+    verifiedEmail: {
+      async resolve({ bearer, jwt, status }) {
+        const user = await resolveUser(bearer, (t) => jwt.verify(t));
+        if (!user) return status(401, UNAUTHORIZED);
+
+        const [row] = await db
+          .select({ emailVerifiedAt: users.emailVerifiedAt })
+          .from(users)
+          .where(eq(users.id, user.sub))
+          .limit(1);
+
+        if (!row?.emailVerifiedAt)
+          return status(403, {
+            error: "EMAIL_NOT_VERIFIED",
+            message: "Email verification required",
+          });
+
+        return { user };
+      },
     },
   });

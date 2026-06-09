@@ -9,8 +9,24 @@ const publicColumns = {
   email: users.email,
   name: users.name,
   role: users.role,
+  emailVerifiedAt: users.emailVerifiedAt,
   createdAt: users.createdAt,
 };
+
+type UserRow = {
+  id: string;
+  email: string;
+  name: string | null;
+  role: "user" | "admin";
+  emailVerifiedAt: Date | null;
+  createdAt: Date;
+};
+
+/** Map a DB row to the public shape (timestamp → derived boolean). */
+const toPublic = ({ emailVerifiedAt, ...rest }: UserRow) => ({
+  ...rest,
+  emailVerified: emailVerifiedAt !== null,
+});
 
 /**
  * Example CRUD service. Copy this module (service + model + index) as the
@@ -21,12 +37,13 @@ export abstract class UserService {
   // than return the Drizzle query builder (a thenable) straight to a route, so
   // Elysia validates resolved data (notably for array responses).
   static async list(limit = 20, offset = 0, ownerId?: string) {
-    return db
+    const rows = await db
       .select(publicColumns)
       .from(users)
       .where(ownerId ? eq(users.id, ownerId) : undefined)
       .limit(limit)
       .offset(offset);
+    return rows.map(toPublic);
   }
 
   static async getById(id: string) {
@@ -36,7 +53,7 @@ export abstract class UserService {
       .where(eq(users.id, id))
       .limit(1);
     if (!user) throw new NotFoundError("User not found");
-    return user;
+    return toPublic(user);
   }
 
   static async update(
@@ -52,7 +69,7 @@ export abstract class UserService {
       .where(eq(users.id, id))
       .returning(publicColumns);
     if (!user) throw new NotFoundError("User not found");
-    return user;
+    return toPublic(user);
   }
 
   static async remove(id: string) {
