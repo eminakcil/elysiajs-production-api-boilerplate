@@ -3,9 +3,12 @@
   "version": "1.0.50",
   "scripts": {
     "dev": "bun run --watch src/index.ts",
+    "worker": "bun run src/worker.ts",
+    "worker:dev": "bun run --watch src/worker.ts",
     "start": "bun run src/index.ts",
     "test": "bun test",
     "build": "bun build --compile --minify --target bun --outfile server src/index.ts",
+    "build:worker": "bun build --compile --minify --target bun --outfile worker src/worker.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "drizzle-kit migrate",
     "db:push": "drizzle-kit push",
@@ -19,13 +22,16 @@
     "@elysiajs/cors": "^1.4.2",
     "@elysiajs/jwt": "^1.4.2",
     "@elysiajs/openapi": "^1.4.15",
+    "bullmq": "^5.78.0",
     "drizzle-orm": "^0.45.2",
     "drizzle-typebox": "^0.3.3",
     "elysia": "latest",
+    "nodemailer": "^8.0.10",
     "postgres": "^3.4.9"
   },
   "devDependencies": {
     "@biomejs/biome": "^2.4.16",
+    "@types/nodemailer": "^8.0.0",
     "bun-types": "latest",
     "drizzle-kit": "^0.31.10"
   },

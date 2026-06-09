@@ -1,4 +1,5 @@
-import { env } from "../config/env";
+import nodemailer from "nodemailer";
+import { env, isProduction, isTest } from "../config/env";
 
 export interface Mail {
   to: string;
@@ -7,28 +8,62 @@ export interface Mail {
   html?: string;
 }
 
-/** A transport actually delivers a mail. Swap this to wire a real provider. */
-type Transport = (
-  mail: Required<Pick<Mail, "to" | "subject" | "text">> & Mail,
-) => Promise<void>;
+type Transport = (mail: Mail) => Promise<void>;
 
 /**
- * Dev transport: logs the email to the console. Replace with a real transport
- * (SMTP via nodemailer, Resend API, etc.) — keep the same `Transport` shape so
- * nothing else changes.
+ * Resolve the active transport:
+ * - tests        → capture only (no network); read `outbox` to assert.
+ * - "log"        → console (development default; swap for a logger if desired).
+ * - "smtp"       → real SMTP via nodemailer (production default; Mailtrap-ready).
+ * - "auto"       → log in development, smtp in production.
+ * Falls back to "log" if smtp is selected without credentials.
  */
-const logTransport: Transport = async (mail) => {
-  console.log(
-    `📧 [mail] from=${env.EMAIL_FROM} to=${mail.to} subject="${mail.subject}"\n${mail.text}`,
-  );
+function resolveMode(): "capture" | "log" | "smtp" {
+  if (isTest) return "capture";
+  const mode =
+    env.MAIL_TRANSPORT === "auto"
+      ? isProduction
+        ? "smtp"
+        : "log"
+      : env.MAIL_TRANSPORT;
+  if (mode === "smtp" && (!env.SMTP_HOST || !env.SMTP_USER)) {
+    console.warn(
+      "⚠️  MAIL_TRANSPORT=smtp but SMTP_HOST/SMTP_USER missing — logging emails to console instead",
+    );
+    return "log";
+  }
+  return mode;
+}
+
+const mode = resolveMode();
+
+const transporter =
+  mode === "smtp"
+    ? nodemailer.createTransport({
+        host: env.SMTP_HOST,
+        port: env.SMTP_PORT,
+        secure: env.SMTP_SECURE,
+        auth: { user: env.SMTP_USER, pass: env.SMTP_PASS },
+      })
+    : null;
+
+const transports: Record<"capture" | "log" | "smtp", Transport> = {
+  capture: async () => {},
+  log: async (mail) => {
+    console.log(
+      `📧 [mail] from=${env.EMAIL_FROM} to=${mail.to} subject="${mail.subject}"\n${mail.text}`,
+    );
+  },
+  smtp: async (mail) => {
+    await transporter?.sendMail({ from: env.EMAIL_FROM, ...mail });
+  },
 };
 
-const transport: Transport = logTransport;
+const transport = transports[mode];
 
 /**
- * In-memory record of recently sent mail. Useful in dev/tests to inspect what
- * would have been sent (e.g. to read an OTP code). Capped; not for production
- * delivery guarantees.
+ * Recently sent mail, kept in memory for dev/test inspection (e.g. reading an
+ * OTP code in tests via `lastTo`). Capped; not a delivery guarantee.
  */
 export const outbox: Mail[] = [];
 const OUTBOX_LIMIT = 50;

@@ -31,8 +31,9 @@ yarn-error.log*
 .env.test.local
 .env.production.local
 
-# compiled binary (bun build --compile)
+# compiled binaries (bun build --compile)
 /server
+/worker
 
 # vercel
 .vercel

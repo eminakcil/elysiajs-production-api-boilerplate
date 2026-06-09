@@ -34,6 +34,8 @@ src/
 ├── config/env.ts     # validated env — import { env } from here, never read process.env directly
 ├── db/               # schema/ (table per file), model/ (typebox per file), index.ts (client), utils.ts
 │                      #   schema/ and model/ are symmetric: each table has a file in both, re-exported by a barrel index.ts
+├── queue/            # BullMQ: connection, defineQueue, runtime, email queue
+├── worker.ts         # background worker entrypoint (separate process)
 ├── plugins/          # cross-cutting: cors, openapi, error, logger, auth
 ├── modules/<feature>/  # index.ts (routes) · service.ts (logic) · model.ts (schemas)
 └── lib/              # errors.ts, time.ts, permissions.ts, cache.ts (Redis), mailer.ts
@@ -145,11 +147,37 @@ not-found-route (404) and parse (400) are handled automatically.
 
 ## Email
 
-- [src/lib/mailer.ts](src/lib/mailer.ts) — `mailer.send({ to, subject, text, html? })`.
-  The default **transport logs to the console** (dev) and records sent mail in an
-  in-memory `outbox` (tests read it via `lastTo`). To use a real provider (SMTP /
-  Resend), swap the `transport` constant — keep the `Transport` shape so callers
-  don't change. `EMAIL_FROM` env sets the from address.
+- [src/lib/mailer.ts](src/lib/mailer.ts) is the **delivery layer** —
+  `mailer.send(...)`. Transport via `MAIL_TRANSPORT`: `auto` (default — **log in
+  development, SMTP in production**), or force `log`/`smtp`. SMTP uses **nodemailer**
+  (`SMTP_*` env; Mailtrap-ready) and falls back to console log if creds are
+  missing. Tests use a **no-op capture**. Every send is recorded in an in-memory
+  `outbox` (tests read it via `lastTo`). To develop against a real inbox set
+  `MAIL_TRANSPORT=smtp` + Mailtrap creds. The `log` transport can be swapped for a
+  structured logger later.
+- **Don't call `mailer.send` from request handlers** — enqueue instead:
+  `emailQueue.add({ to, subject, text })`. Only the worker (or the sync driver)
+  delivers.
+
+## Queues (BullMQ)
+
+Slow/external work (email, and future jobs like SMS or webhooks) runs as
+background jobs so requests return fast and failures retry.
+
+- **Producers** call `<queue>.add(data)` (e.g. [queue/email.queue.ts](src/queue/email.queue.ts)).
+  **Consumers** are BullMQ workers started from [src/worker.ts](src/worker.ts), a
+  separate process — run `bun run worker` in dev; a dedicated container in prod.
+- Define a queue with `defineQueue<T>(name, processor, defaultJobOpts?)`
+  ([queue/define.ts](src/queue/define.ts)). The same `processor` powers both the
+  worker and the inline driver, so there's one place that handles a job. Jobs
+  default to 3 attempts with exponential backoff.
+- **Driver** ([queue/connection.ts](src/queue/connection.ts)): `redis` (BullMQ) in
+  dev/prod; `sync` (inline, no worker/Redis) forced in tests — so `.add()` runs the
+  processor immediately and existing tests stay synchronous. Set via `QUEUE_DRIVER`.
+- **New queue recipe:** add `queue/<name>.queue.ts` with
+  `export const xQueue = defineQueue<XJob>("x", (data) => handler(data))`, register
+  it in `src/worker.ts` (`startWorker(xQueue)`), and close its producer in
+  `index.ts` shutdown. Producers just `xQueue.add(...)`.
 
 ## Permissions
 

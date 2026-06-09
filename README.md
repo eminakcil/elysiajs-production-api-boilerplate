@@ -10,8 +10,9 @@ tests, Docker and CI.
 - **Framework:** ElysiaJS
 - **Database:** PostgreSQL via Drizzle ORM (`drizzle-typebox` bridges schemas → validation)
 - **Cache:** Redis (Bun's built-in client) — caching + OTP storage
+- **Queue:** BullMQ (Redis) — background jobs (email) with retries; separate worker process
+- **Email:** SMTP via nodemailer (Mailtrap-ready); logs to console in dev without creds
 - **Auth:** Custom JWT (access + rotating refresh) + Bearer, `Bun.password` (argon2id) hashing, permission model + email verification (OTP)
-- **Email:** pluggable mailer (dev logs to console; wire SMTP/Resend in prod)
 - **Docs:** OpenAPI at `/openapi`
 - **Quality:** Biome (lint + format), `bun test`
 
@@ -31,8 +32,9 @@ docker compose up -d
 bun run db:generate          # generate migration from schema (commit the output)
 bun run db:migrate           # apply migrations
 
-# 5. Run the API
+# 5. Run the API (and, in another terminal, the background worker)
 bun run dev                  # http://localhost:3000  ·  docs at /openapi
+bun run worker               # processes email jobs from the queue
 ```
 
 ## Project structure
@@ -45,15 +47,21 @@ src/
 ├── db/               # Drizzle: schema, client, drizzle-typebox models, utils
 ├── plugins/          # cors, openapi, error, logger, auth (each named for dedupe)
 ├── modules/          # feature modules (auth, user) — each = controller/service/model
-└── lib/              # shared helpers (errors, time)
+├── queue/            # BullMQ email queue + worker runtime
+├── worker.ts         # background worker entrypoint
+└── lib/              # shared helpers (errors, time, cache, mailer)
 test/                 # bun:test integration tests via app.handle()
 ```
+
+Background jobs run in a separate worker process (`bun run worker`). In tests the
+queue uses an inline "sync" driver, so no worker/Redis is needed.
 
 ## Scripts
 
 | Command | Description |
 | --- | --- |
 | `bun run dev` | Dev server with hot reload |
+| `bun run worker` | Background job worker (email queue) |
 | `bun run start` | Run without watch |
 | `bun test` | Run tests (needs a running database) |
 | `bun run build` | Compile to a standalone `./server` binary |

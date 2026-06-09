@@ -1,6 +1,7 @@
 import { cache } from "../../lib/cache";
 import { BadRequestError } from "../../lib/errors";
-import { type Mail, mailer } from "../../lib/mailer";
+import type { Mail } from "../../lib/mailer";
+import { emailQueue } from "../../queue/email.queue";
 
 const OTP_TTL_SECONDS = 10 * 60; // code lifetime
 const COOLDOWN_SECONDS = 60; // min gap between requests
@@ -46,7 +47,7 @@ export abstract class OtpService {
     await cache.set(attemptsKey(userId), "0", OTP_TTL_SECONDS);
     await cache.set(cooldownKey(userId), "1", COOLDOWN_SECONDS);
 
-    await mailer.send(otpEmail(email, code));
+    await emailQueue.add(otpEmail(email, code));
   }
 
   /**

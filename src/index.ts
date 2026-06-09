@@ -2,6 +2,7 @@ import { app } from "./app";
 import { env } from "./config/env";
 import { queryClient } from "./db";
 import { redis } from "./lib/cache";
+import { emailQueue } from "./queue/email.queue";
 
 app.listen(env.PORT, () => {
   console.log(
@@ -16,6 +17,8 @@ const shutdown = async (signal: string) => {
   await app.stop();
   await queryClient.end({ timeout: 5 });
   redis.close();
+  // Close queue producers (no-op in sync mode).
+  await emailQueue.bull?.close();
   process.exit(0);
 };
 

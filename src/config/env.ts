@@ -28,8 +28,23 @@ const EnvSchema = t.Object({
   // Redis connection string (caching, OTP storage).
   REDIS_URL: t.String({ default: "redis://localhost:6379" }),
 
-  // From address for outgoing email (dev log transport by default).
+  // Email transport: "auto" (log in dev, smtp in prod), or force "log"/"smtp".
+  MAIL_TRANSPORT: t.Union(
+    [t.Literal("auto"), t.Literal("log"), t.Literal("smtp")],
+    { default: "auto" },
+  ),
+  // SMTP (via nodemailer). Defaults target Mailtrap's sandbox; fill USER/PASS to send.
   EMAIL_FROM: t.String({ default: "no-reply@example.com" }),
+  SMTP_HOST: t.String({ default: "sandbox.smtp.mailtrap.io" }),
+  SMTP_PORT: t.Number({ default: 2525 }),
+  SMTP_USER: t.String({ default: "" }),
+  SMTP_PASS: t.String({ default: "" }),
+  SMTP_SECURE: t.Boolean({ default: false }),
+
+  // Job queue driver: "redis" (BullMQ worker) or "sync" (inline; used in tests).
+  QUEUE_DRIVER: t.Union([t.Literal("redis"), t.Literal("sync")], {
+    default: "redis",
+  }),
 });
 
 export type Env = typeof EnvSchema.static;
