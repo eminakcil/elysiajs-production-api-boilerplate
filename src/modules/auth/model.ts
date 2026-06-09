@@ -1,5 +1,5 @@
 import { t } from "elysia";
-import { sanitizedString } from "../../lib/sanitize";
+import { sanitizedString } from "@/lib/sanitize";
 
 /** Public-safe representation of a user (never includes the password hash). */
 export const publicUser = t.Object({

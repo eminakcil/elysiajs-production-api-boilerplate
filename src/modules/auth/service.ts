@@ -1,7 +1,7 @@
 import { and, eq, gt } from "drizzle-orm";
-import { db } from "../../db";
-import { refreshTokens, users } from "../../db/schema";
-import { ConflictError, UnauthorizedError } from "../../lib/errors";
+import { db } from "@/db";
+import { refreshTokens, users } from "@/db/schema";
+import { ConflictError, UnauthorizedError } from "@/lib/errors";
 
 /**
  * Request-independent auth logic: password hashing and all database access.

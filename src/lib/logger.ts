@@ -1,6 +1,6 @@
 import pino from "pino";
 import pretty from "pino-pretty";
-import { env, isProduction, isTest } from "../config/env";
+import { env, isProduction, isTest } from "@/config/env";
 
 /**
  * Central structured logger (Pino).

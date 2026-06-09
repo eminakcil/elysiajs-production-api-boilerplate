@@ -1,5 +1,5 @@
 import nodemailer from "nodemailer";
-import { env, isProduction, isTest } from "../config/env";
+import { env, isProduction, isTest } from "@/config/env";
 import { logger } from "./logger";
 
 export interface Mail {

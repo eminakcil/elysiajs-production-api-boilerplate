@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
-import { app } from "../src/app";
-import { db } from "../src/db";
-import { users } from "../src/db/schema";
-import { mailer } from "../src/lib/mailer";
+import { app } from "@/app";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { mailer } from "@/lib/mailer";
 
 /** Fire a request at the app in-process (no network) and get the Response. */
 export const api = (path: string, init?: RequestInit) =>

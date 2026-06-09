@@ -1,7 +1,7 @@
-import { cache } from "../../lib/cache";
-import { BadRequestError } from "../../lib/errors";
-import type { Mail } from "../../lib/mailer";
-import { emailQueue } from "../../queue/email.queue";
+import { cache } from "@/lib/cache";
+import { BadRequestError } from "@/lib/errors";
+import type { Mail } from "@/lib/mailer";
+import { emailQueue } from "@/queue/email.queue";
 
 const OTP_TTL_SECONDS = 10 * 60; // code lifetime
 const COOLDOWN_SECONDS = 60; // min gap between requests

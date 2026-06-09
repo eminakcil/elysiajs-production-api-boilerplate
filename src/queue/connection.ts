@@ -1,5 +1,5 @@
 import type { ConnectionOptions } from "bullmq";
-import { env, isTest } from "../config/env";
+import { env, isTest } from "@/config/env";
 
 /**
  * Queue driver:

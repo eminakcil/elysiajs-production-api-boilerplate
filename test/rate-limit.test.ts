@@ -1,7 +1,7 @@
 import { describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
 import { rateLimit } from "elysia-rate-limit";
-import { RedisRateStore } from "../src/plugins/rate-limit-store";
+import { RedisRateStore } from "@/plugins/rate-limit-store";
 
 // A throwaway limiter with a fixed key and max=2 (no `skip`, unlike the app's
 // module limiters which are skipped in tests). Verifies the Redis store + 429.
@@ -32,7 +32,9 @@ describe("rate limiting (requires Redis)", () => {
 
     const limited = await ping();
     expect(limited.status).toBe(429);
-    expect((await limited.json()).error).toBe("RATE_LIMITED");
+    expect(((await limited.json()) as { error: string }).error).toBe(
+      "RATE_LIMITED",
+    );
 
     // RateLimit-* headers are set.
     expect(limited.headers.get("ratelimit-limit")).toBeTruthy();

@@ -1,4 +1,4 @@
-import { env } from "../config/env";
+import { env } from "@/config/env";
 
 /** Minimal shape of the Bun server needed to resolve a client IP. */
 type IpServer = {

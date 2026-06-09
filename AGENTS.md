@@ -257,6 +257,9 @@ defined in [src/lib/permissions.ts](src/lib/permissions.ts).
   and import organization. Run `bun run lint:fix` before committing; CI fails on
   lint errors.
 - Use `import type` for type-only imports (`verbatimModuleSyntax` is on).
+- **Imports: use the `@/` alias** (`@/*` → `src/*`) for anything outside the
+  current folder — no `../../` traversals. Keep `./sibling` relative for same-dir
+  files. The alias resolves in type-check, Bun runtime, tests, and `bun build`.
 
 ## ElysiaJS rules (do)
 

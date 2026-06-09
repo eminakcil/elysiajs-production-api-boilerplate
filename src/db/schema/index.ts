@@ -1,7 +1,7 @@
 /**
  * Schema barrel. Add a file per table (or per cohesive group of tables) in this
  * folder and re-export it here. Everything exported from this file is picked up
- * by drizzle-kit (see drizzle.config.ts) and available as `import { ... } from "../db/schema"`.
+ * by drizzle-kit (see drizzle.config.ts) and available as `import { ... } from "@/db/schema"`.
  */
 export * from "./refresh-tokens";
 export * from "./users";

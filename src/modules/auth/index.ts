@@ -1,9 +1,9 @@
 import { Elysia } from "elysia";
-import { env } from "../../config/env";
-import { BadRequestError, UnauthorizedError } from "../../lib/errors";
-import { durationToMs } from "../../lib/time";
-import { authPlugin } from "../../plugins/auth";
-import { ipRateLimit } from "../../plugins/rate-limit";
+import { env } from "@/config/env";
+import { BadRequestError, UnauthorizedError } from "@/lib/errors";
+import { durationToMs } from "@/lib/time";
+import { authPlugin } from "@/plugins/auth";
+import { ipRateLimit } from "@/plugins/rate-limit";
 import { authModel } from "./model";
 import { OtpService } from "./otp.service";
 import { AuthService } from "./service";

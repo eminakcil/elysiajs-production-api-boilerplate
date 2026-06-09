@@ -1,7 +1,7 @@
 import { eq } from "drizzle-orm";
-import { db } from "../../db";
-import { users } from "../../db/schema";
-import { BadRequestError, NotFoundError } from "../../lib/errors";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { BadRequestError, NotFoundError } from "@/lib/errors";
 
 /** Columns safe to expose publicly — note the password hash is never selected. */
 const publicColumns = {

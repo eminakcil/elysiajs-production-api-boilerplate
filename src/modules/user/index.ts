@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
-import { ForbiddenError } from "../../lib/errors";
-import { authPlugin } from "../../plugins/auth";
-import { userRateLimit } from "../../plugins/rate-limit";
+import { ForbiddenError } from "@/lib/errors";
+import { authPlugin } from "@/plugins/auth";
+import { userRateLimit } from "@/plugins/rate-limit";
 import { userModel } from "./model";
 import { UserService } from "./service";
 

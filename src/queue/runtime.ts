@@ -1,5 +1,5 @@
 import { Worker } from "bullmq";
-import { logger } from "../lib/logger";
+import { logger } from "@/lib/logger";
 import { connection } from "./connection";
 import type { QueueDef } from "./define";
 

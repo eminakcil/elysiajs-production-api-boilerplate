@@ -2,10 +2,10 @@ import { bearer } from "@elysiajs/bearer";
 import { jwt } from "@elysiajs/jwt";
 import { eq } from "drizzle-orm";
 import { Elysia } from "elysia";
-import { env } from "../config/env";
-import { db } from "../db";
-import { users } from "../db/schema";
-import { type Operation, type Role, resolveScope } from "../lib/permissions";
+import { env } from "@/config/env";
+import { db } from "@/db";
+import { users } from "@/db/schema";
+import { type Operation, type Role, resolveScope } from "@/lib/permissions";
 
 /** Claims carried by an access token. */
 export interface AccessPayload {

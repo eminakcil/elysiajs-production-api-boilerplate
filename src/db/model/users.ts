@@ -1,7 +1,7 @@
 import { createInsertSchema, createSelectSchema } from "drizzle-typebox";
 import { t } from "elysia";
-import { users } from "../schema/users";
-import { spread } from "../utils";
+import { users } from "@/db/schema/users";
+import { spread } from "@/db/utils";
 
 /**
  * TypeBox column schemas for the `users` table (the validation-layer mirror of

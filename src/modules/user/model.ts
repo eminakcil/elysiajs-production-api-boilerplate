@@ -1,6 +1,6 @@
 import { t } from "elysia";
-import { dbSchema } from "../../db/model";
-import { sanitizedString } from "../../lib/sanitize";
+import { dbSchema } from "@/db/model";
+import { sanitizedString } from "@/lib/sanitize";
 
 // Compose request/response schemas from the Drizzle-derived column schemas
 // (single source of truth — see db/model.ts).

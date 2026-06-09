@@ -1,7 +1,7 @@
 import { Elysia } from "elysia";
-import { isProduction } from "../config/env";
-import { AppError } from "../lib/errors";
-import { logger } from "../lib/logger";
+import { isProduction } from "@/config/env";
+import { AppError } from "@/lib/errors";
+import { logger } from "@/lib/logger";
 
 /**
  * Centralized error handling. Maps domain errors (AppError) and framework

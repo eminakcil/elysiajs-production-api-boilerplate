@@ -1,5 +1,5 @@
 import { Elysia } from "elysia";
-import { logger } from "../lib/logger";
+import { logger } from "@/lib/logger";
 
 /**
  * Per-request logging. Adds a `requestId` and a bound child `log` to the context

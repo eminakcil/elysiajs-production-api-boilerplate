@@ -1,6 +1,6 @@
 import { cors } from "@elysiajs/cors";
 import { Elysia } from "elysia";
-import { env } from "../config/env";
+import { env } from "@/config/env";
 
 /**
  * CORS configuration. Named so it's only applied once across the app.

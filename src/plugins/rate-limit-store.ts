@@ -1,4 +1,4 @@
-import { redis } from "../lib/cache";
+import { redis } from "@/lib/cache";
 
 /**
  * Redis-backed store for elysia-rate-limit (implements its `Context` interface).

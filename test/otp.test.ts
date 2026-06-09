@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
 import { Elysia } from "elysia";
-import { authPlugin } from "../src/plugins/auth";
+import { authPlugin } from "@/plugins/auth";
 import { api, body, json, lastOtp, registerUser, verifyEmail } from "./helpers";
 
 const bearer = (token: string) => ({ Authorization: `Bearer ${token}` });

@@ -8,6 +8,11 @@
     "moduleDetection": "force",
     "types": ["bun-types"],
 
+    // Path alias: import from "@/..." instead of deep "../../" relatives.
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+
     // Interop
     "allowJs": true,
     "esModuleInterop": true,

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "bun:test";
-import { sanitizeText } from "../src/lib/sanitize";
+import { sanitizeText } from "@/lib/sanitize";
 import { body, json, registerUser, uniqueEmail } from "./helpers";
 
 describe("input sanitization", () => {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "bun:test";
-import { outbox as mailOutbox } from "../src/lib/mailer";
-import { emailQueue } from "../src/queue/email.queue";
+import { outbox as mailOutbox } from "@/lib/mailer";
+import { emailQueue } from "@/queue/email.queue";
 
 // Tests run with the "sync" driver (see queue/connection.ts), so `.add()`
 // processes the job inline — no Redis or worker required.

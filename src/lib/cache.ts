@@ -1,5 +1,5 @@
 import { RedisClient } from "bun";
-import { env } from "../config/env";
+import { env } from "@/config/env";
 
 /**
  * Shared Redis client (Bun's built-in RedisClient — no extra dependency).

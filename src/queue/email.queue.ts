@@ -1,4 +1,4 @@
-import { type Mail, mailer } from "../lib/mailer";
+import { type Mail, mailer } from "@/lib/mailer";
 import { defineQueue } from "./define";
 
 /**

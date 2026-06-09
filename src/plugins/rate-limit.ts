@@ -1,6 +1,6 @@
 import { rateLimit } from "elysia-rate-limit";
-import { isTest } from "../config/env";
-import { clientIp } from "../lib/ip";
+import { isTest } from "@/config/env";
+import { clientIp } from "@/lib/ip";
 import { RedisRateStore } from "./rate-limit-store";
 
 interface Opts {
