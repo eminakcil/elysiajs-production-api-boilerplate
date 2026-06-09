@@ -1,0 +1,158 @@
+import { Elysia } from "elysia";
+import { env } from "../../config/env";
+import { UnauthorizedError } from "../../lib/errors";
+import { durationToMs } from "../../lib/time";
+import { authPlugin } from "../../plugins/auth";
+import { authModel } from "./model";
+import { AuthService } from "./service";
+
+const REFRESH_MS = durationToMs(env.JWT_REFRESH_EXP) || durationToMs("7d");
+
+const toPublicUser = (u: {
+  id: string;
+  email: string;
+  name: string | null;
+  role: "user" | "admin";
+}) => ({ id: u.id, email: u.email, name: u.name, role: u.role });
+
+/**
+ * Auth controller. The Elysia instance *is* the controller (Elysia idiom).
+ * Public: /register, /login, /refresh. Protected: /me, /logout.
+ */
+export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
+  .use(authPlugin)
+  .model(authModel)
+  .post(
+    "/register",
+    async ({ body, jwt, refreshJwt }) => {
+      const user = await AuthService.createUser(
+        body.email,
+        body.password,
+        body.name,
+      );
+
+      const accessToken = await jwt.sign({
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+      });
+      const refreshToken = await refreshJwt.sign({
+        sub: user.id,
+        jti: crypto.randomUUID(),
+      });
+      await AuthService.storeRefreshToken(
+        user.id,
+        refreshToken,
+        new Date(Date.now() + REFRESH_MS),
+      );
+
+      return { accessToken, refreshToken, user: toPublicUser(user) };
+    },
+    {
+      body: "registerBody",
+      response: "tokenResponse",
+      detail: { summary: "Register a new user", tags: ["Auth"] },
+    },
+  )
+  .post(
+    "/login",
+    async ({ body, jwt, refreshJwt }) => {
+      const user = await AuthService.verifyCredentials(
+        body.email,
+        body.password,
+      );
+
+      const accessToken = await jwt.sign({
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+      });
+      const refreshToken = await refreshJwt.sign({
+        sub: user.id,
+        jti: crypto.randomUUID(),
+      });
+      await AuthService.storeRefreshToken(
+        user.id,
+        refreshToken,
+        new Date(Date.now() + REFRESH_MS),
+      );
+
+      return { accessToken, refreshToken, user: toPublicUser(user) };
+    },
+    {
+      body: "loginBody",
+      response: "tokenResponse",
+      detail: { summary: "Log in with email and password", tags: ["Auth"] },
+    },
+  )
+  .post(
+    "/refresh",
+    async ({ body, jwt, refreshJwt }) => {
+      const payload = await refreshJwt.verify(body.refreshToken);
+      if (!payload) throw new UnauthorizedError("Invalid refresh token");
+
+      // Rotation: invalidate the presented token (also checks DB + expiry).
+      await AuthService.consumeRefreshToken(body.refreshToken);
+
+      const user = await AuthService.findById(payload.sub as string);
+      if (!user) throw new UnauthorizedError();
+
+      const accessToken = await jwt.sign({
+        sub: user.id,
+        email: user.email,
+        role: user.role,
+      });
+      const refreshToken = await refreshJwt.sign({
+        sub: user.id,
+        jti: crypto.randomUUID(),
+      });
+      await AuthService.storeRefreshToken(
+        user.id,
+        refreshToken,
+        new Date(Date.now() + REFRESH_MS),
+      );
+
+      return { accessToken, refreshToken, user: toPublicUser(user) };
+    },
+    {
+      body: "refreshBody",
+      response: "tokenResponse",
+      detail: {
+        summary: "Exchange a refresh token for new tokens",
+        tags: ["Auth"],
+      },
+    },
+  )
+  .get(
+    "/me",
+    async ({ user }) => {
+      const current = await AuthService.findById(user.sub);
+      if (!current) throw new UnauthorizedError();
+      return toPublicUser(current);
+    },
+    {
+      isAuthed: true,
+      response: "publicUser",
+      detail: {
+        summary: "Get the current user",
+        tags: ["Auth"],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+  )
+  .post(
+    "/logout",
+    async ({ body }) => {
+      await AuthService.revokeRefreshToken(body.refreshToken);
+      return { success: true };
+    },
+    {
+      isAuthed: true,
+      body: "refreshBody",
+      detail: {
+        summary: "Revoke a refresh token",
+        tags: ["Auth"],
+        security: [{ bearerAuth: [] }],
+      },
+    },
+  );

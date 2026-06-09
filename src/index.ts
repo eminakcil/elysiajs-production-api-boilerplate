@@ -1,7 +1,21 @@
-import { Elysia } from "elysia";
+import { app } from "./app";
+import { env } from "./config/env";
+import { queryClient } from "./db";
 
-const app = new Elysia().get("/", () => "Hello Elysia").listen(3000);
+app.listen(env.PORT, () => {
+  console.log(
+    `🦊 Elysia running at http://localhost:${env.PORT} (${env.NODE_ENV})`,
+  );
+  console.log(`📚 OpenAPI docs at http://localhost:${env.PORT}/openapi`);
+});
 
-console.log(
-  `🦊 Elysia is running at ${app.server?.hostname}:${app.server?.port}`
-);
+// Graceful shutdown: stop accepting requests, then close the DB pool.
+const shutdown = async (signal: string) => {
+  console.log(`\n${signal} received — shutting down...`);
+  await app.stop();
+  await queryClient.end({ timeout: 5 });
+  process.exit(0);
+};
+
+process.on("SIGTERM", () => shutdown("SIGTERM"));
+process.on("SIGINT", () => shutdown("SIGINT"));

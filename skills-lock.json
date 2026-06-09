@@ -1,6 +1,12 @@
 {
   "version": 1,
   "skills": {
+    "agentsmd-claudemd-generator": {
+      "source": "mounirdhahri/skills",
+      "sourceType": "github",
+      "skillPath": "skills/agentsmd-claudemd-generator/SKILL.md",
+      "computedHash": "8e64d69e245cdf656d576e8a90343eb2da841b87f018fcaaaa413781aa950964"
+    },
     "elysiajs": {
       "source": "elysiajs/skills",
       "sourceType": "github",

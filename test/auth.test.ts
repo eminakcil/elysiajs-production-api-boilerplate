@@ -1,0 +1,60 @@
+import { describe, expect, it } from "bun:test";
+import { api, body, json, uniqueEmail } from "./helpers";
+
+describe("health", () => {
+  it("returns ok", async () => {
+    const res = await api("/health");
+    expect(res.status).toBe(200);
+    expect((await body(res)).status).toBe("ok");
+  });
+});
+
+describe("auth (requires a running database)", () => {
+  it("rejects /auth/me without a token", async () => {
+    const res = await api("/auth/me");
+    expect(res.status).toBe(401);
+  });
+
+  it("registers, logs in, fetches profile, and refreshes", async () => {
+    const email = uniqueEmail();
+    const password = "supersecret";
+
+    const register = await json("/auth/register", "POST", {
+      email,
+      password,
+      name: "Test User",
+    });
+    expect(register.status).toBe(200);
+    const registered = await body(register);
+    expect(registered.accessToken).toBeString();
+    expect(registered.refreshToken).toBeString();
+    expect(registered.user.email).toBe(email);
+
+    const login = await json("/auth/login", "POST", { email, password });
+    expect(login.status).toBe(200);
+    const { accessToken, refreshToken } = await body(login);
+
+    const me = await api("/auth/me", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    expect(me.status).toBe(200);
+    expect((await body(me)).email).toBe(email);
+
+    const refreshed = await json("/auth/refresh", "POST", { refreshToken });
+    expect(refreshed.status).toBe(200);
+    expect((await body(refreshed)).accessToken).toBeString();
+
+    // The rotated (old) refresh token must no longer work.
+    const reused = await json("/auth/refresh", "POST", { refreshToken });
+    expect(reused.status).toBe(401);
+  });
+
+  it("rejects duplicate registration", async () => {
+    const email = uniqueEmail();
+    const password = "supersecret";
+    const first = await json("/auth/register", "POST", { email, password });
+    expect(first.status).toBe(200);
+    const second = await json("/auth/register", "POST", { email, password });
+    expect(second.status).toBe(409);
+  });
+});
