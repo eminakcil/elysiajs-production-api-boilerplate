@@ -28,6 +28,9 @@ const EnvSchema = t.Object({
   // Log level: trace | debug | info | warn | error | fatal | silent.
   LOG_LEVEL: t.String({ default: "info" }),
 
+  // Trust X-Forwarded-For for client IP (enable behind a proxy/load balancer).
+  TRUST_PROXY: t.Boolean({ default: false }),
+
   // Redis connection string (caching, OTP storage).
   REDIS_URL: t.String({ default: "redis://localhost:6379" }),
 

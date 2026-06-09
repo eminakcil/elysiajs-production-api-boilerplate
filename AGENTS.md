@@ -38,7 +38,7 @@ src/
 ├── worker.ts         # background worker entrypoint (separate process)
 ├── plugins/          # cross-cutting: cors, openapi, error, logger, auth
 ├── modules/<feature>/  # index.ts (routes) · service.ts (logic) · model.ts (schemas)
-└── lib/              # errors, time, permissions, cache, mailer, logger, sanitize
+└── lib/              # errors, time, permissions, cache, mailer, logger, sanitize, ip
 ```
 
 ## Adding a new module (recipe)
@@ -215,6 +215,20 @@ defined in [src/lib/permissions.ts](src/lib/permissions.ts).
   controller decides authorization.
 - To grant a new resource's permissions, add `'<model>:<op>:<scope>'` entries to
   the relevant role in `ROLE_PERMISSIONS`.
+
+## Rate limiting
+
+- `elysia-rate-limit` with a **Redis-backed store**
+  ([plugins/rate-limit-store.ts](src/plugins/rate-limit-store.ts)) so counters are
+  shared across API replicas. Opt-in per group: `.use(ipRateLimit({ max, duration }))`
+  or `.use(userRateLimit({ max, duration }))` ([plugins/rate-limit.ts](src/plugins/rate-limit.ts)).
+- `ipRateLimit` keys by client IP (auth/public endpoints); `userRateLimit` keys by
+  the resolved user id, falling back to the bearer token, then IP. `RateLimit-*`
+  headers are set automatically; over-limit returns 429 `{ error: "RATE_LIMITED" }`.
+- Applied to the auth module (per-IP) and user module (per-user). **Skipped in
+  tests** (`skip: () => isTest`) so the suite isn't throttled.
+- Client IP via [lib/ip.ts](src/lib/ip.ts) — set `TRUST_PROXY=true` behind a
+  proxy/LB to read `X-Forwarded-For`, otherwise everyone shares the proxy's IP.
 
 ## Input sanitization (XSS)
 

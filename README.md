@@ -13,6 +13,7 @@ tests, Docker and CI.
 - **Queue:** BullMQ (Redis) — background jobs (email) with retries; separate worker process
 - **Email:** SMTP via nodemailer (Mailtrap-ready); logs to console in dev without creds
 - **Logging:** Pino — pretty in dev, JSON in prod (stdout → any log aggregator); `LOG_LEVEL` configurable
+- **Rate limiting:** elysia-rate-limit (Redis-backed) — per-IP and per-user, opt-in per group
 - **Auth:** Custom JWT (access + rotating refresh) + Bearer, `Bun.password` (argon2id) hashing, permission model + email verification (OTP)
 - **Docs:** OpenAPI at `/openapi`
 - **Quality:** Biome (lint + format), `bun test`

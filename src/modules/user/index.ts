@@ -1,6 +1,7 @@
 import { Elysia } from "elysia";
 import { ForbiddenError } from "../../lib/errors";
 import { authPlugin } from "../../plugins/auth";
+import { userRateLimit } from "../../plugins/rate-limit";
 import { userModel } from "./model";
 import { UserService } from "./service";
 
@@ -11,6 +12,8 @@ import { UserService } from "./service";
  */
 export const userModule = new Elysia({ prefix: "/users", tags: ["Users"] })
   .use(authPlugin)
+  // Per-user rate limit (falls back to token/IP when unauthenticated).
+  .use(userRateLimit({ max: 60, duration: 60_000 }))
   .model(userModel)
   .get(
     "/",
