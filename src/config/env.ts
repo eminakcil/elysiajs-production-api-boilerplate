@@ -31,6 +31,10 @@ const EnvSchema = t.Object({
   AUTH_TRANSPORT: t.Union([t.Literal("bearer"), t.Literal("cookie")], {
     default: "bearer",
   }),
+  // Require a verified email on protected routes (403 EMAIL_NOT_VERIFIED until
+  // verified; exempt: /auth/me, /auth/logout, /auth/email/*). When on, register
+  // auto-emails the verification OTP.
+  REQUIRE_VERIFIED_EMAIL: t.Boolean({ default: false }),
 
   // Comma-separated list of allowed origins, or "*" for any.
   CORS_ORIGIN: t.String({ default: "*" }),

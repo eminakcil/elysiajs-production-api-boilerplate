@@ -93,7 +93,10 @@ queue uses an inline "sync" driver, so no worker/Redis is needed.
 Authenticate by sending `Authorization: Bearer <accessToken>`. With
 `AUTH_TRANSPORT=cookie` the refresh token moves to an httpOnly cookie
 (`Path=/auth`, `SameSite=Strict`) instead of the JSON body — pair it with a
-restricted `CORS_ORIGIN` in production.
+restricted `CORS_ORIGIN` in production. Set `REQUIRE_VERIFIED_EMAIL=true` to
+make email verification mandatory: unverified users get 403
+`EMAIL_NOT_VERIFIED` on protected routes (except `/auth/me`, `/auth/logout`,
+`/auth/email/*`) and registration auto-emails the OTP.
 
 ## Docker
 

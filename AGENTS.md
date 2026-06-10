@@ -163,18 +163,33 @@ not-found-route (404) and parse (400) are handled automatically.
 - Login equalizes timing for unknown emails (dummy argon2 verify) to avoid
   account enumeration.
 - Route guards (macros from `plugins/auth.ts`), simplest → most flexible:
-  - `{ isAuthed: true }` — any authenticated user.
+  - `{ isAuthed: true }` — any authenticated user (verified email too when
+    `REQUIRE_VERIFIED_EMAIL` is on).
+  - `{ isAuthed: "allowUnverified" }` — authenticated only; permanently exempt
+    from `REQUIRE_VERIFIED_EMAIL`. Reserved for the verification bootstrap
+    routes (`/auth/me`, `/auth/logout`, `/auth/email/*`).
   - `{ hasRole: 'admin' }` — exact role gate.
   - `{ can: { action: '<model>:<operation>', ownParam? } }` — **permission gate**
     (preferred for resources). All add a typed `user` to the context; `can` also
     adds `scope: 'all' | 'own'`.
-  - `{ verifiedEmail: true }` — requires a verified email (checks the DB fresh).
-    Not applied to any route yet — opt in where needed.
+  - `{ verifiedEmail: true }` — always requires a verified email (checks the DB
+    fresh), independent of the flag — per-route opt-in for flag-off deployments.
 - **Email verification (OTP):** users start unverified (`emailVerifiedAt = null`,
   exposed as the derived `emailVerified` boolean). `POST /auth/email/request-otp`
   emails a 6-digit code (stored hashed in Redis, 10m TTL, 60s resend cooldown,
   5-attempt cap); `POST /auth/email/verify` checks it and sets `emailVerifiedAt`.
   Logic in [modules/auth/otp.service.ts](src/modules/auth/otp.service.ts).
+- **Mandatory verification:** `REQUIRE_VERIFIED_EMAIL=true` makes `isAuthed`/
+  `hasRole`/`can` return 403 `EMAIL_NOT_VERIFIED` for unverified users — checked
+  after authn (401), before authz (`FORBIDDEN`) — and register auto-issues the
+  OTP (best-effort: a failure logs a warning, never fails registration). Exempt:
+  the four `isAuthed: "allowUnverified"` routes; `/auth/refresh` is unaffected
+  by construction (not macro-guarded — unverified users must stay logged in to
+  finish verifying). Read the flag per request like `AUTH_TRANSPORT`, never
+  hoist it to a module const. Cost when on: one indexed PK select per authed
+  request — deliberately uncached (`lib/cache.ts` is the option if it ever
+  matters). Tests normalize both variant flags at boot in `test/helpers.ts` so
+  the suite ignores the local `.env`; variant describes opt in via `setEnv`.
 
 ## Logging
 
