@@ -21,8 +21,9 @@ async function getDummyHash(): Promise<string> {
 
 /**
  * Request-independent auth logic: password hashing and all database access.
- * Token signing lives in the route handlers (it needs the request-scoped JWT
- * signers from the auth plugin).
+ * Access-token signing and refresh-token minting live in `issueTokens` in the
+ * module file (signing needs the request-scoped JWT signer from the auth
+ * plugin).
  */
 export abstract class AuthService {
   static async createUser(email: string, password: string, name?: string) {

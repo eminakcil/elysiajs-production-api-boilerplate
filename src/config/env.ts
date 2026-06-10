@@ -21,9 +21,9 @@ const EnvSchema = t.Object({
   DB_IDLE_TIMEOUT: t.Number({ default: 30 }), // seconds before an idle conn closes
   DB_CONNECT_TIMEOUT: t.Number({ default: 30 }), // seconds to wait for a connection
 
-  // Auth secrets — keep these long and random in production.
+  // Auth — access-token secret (keep it long and random in production).
+  // Refresh tokens are opaque random strings, no signing secret needed.
   JWT_SECRET: t.String({ minLength: 16 }),
-  JWT_REFRESH_SECRET: t.String({ minLength: 16 }),
   JWT_ACCESS_EXP: t.String({ default: "15m" }),
   JWT_REFRESH_EXP: t.String({ default: "7d" }),
 

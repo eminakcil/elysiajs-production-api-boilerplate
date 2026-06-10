@@ -17,7 +17,7 @@ OpenAPI docs, tests, Docker and CI.
 - **Email:** SMTP via nodemailer (Mailtrap-ready); logs to console in dev without creds
 - **Logging:** Pino — pretty in dev, JSON in prod (stdout → any log aggregator); `LOG_LEVEL` configurable
 - **Rate limiting:** elysia-rate-limit (Redis-backed) — per-IP and per-user, opt-in per group
-- **Auth:** Custom JWT (access + rotating refresh, hashed + family-tracked with reuse detection) + Bearer, `Bun.password` (argon2id) hashing, permission model, email verification (OTP), password reset
+- **Auth:** Access JWT + opaque rotating refresh tokens (hashed + family-tracked with reuse detection) + Bearer, `Bun.password` (argon2id) hashing, permission model, email verification (OTP), password reset
 - **Observability:** Prometheus `/metrics`, deep `/ready` probe, append-only audit log for sensitive actions
 - **Hardening:** security headers, request body-size limit, configurable Postgres pool
 - **Docs:** OpenAPI at `/openapi`
@@ -99,7 +99,7 @@ Authenticate by sending `Authorization: Bearer <accessToken>`.
 docker compose up -d
 
 # Full stack (API + worker + Postgres + Redis), e.g. for staging:
-JWT_SECRET=... JWT_REFRESH_SECRET=... docker compose -f docker-compose.prod.yml up --build
+JWT_SECRET=... docker compose -f docker-compose.prod.yml up --build
 ```
 
 The production image is a distroless container running a compiled binary.
@@ -110,8 +110,8 @@ Run migrations against the database separately (see `docker-compose.prod.yml`).
 1. Copy the repo (or use it as a GitHub template) and `bun install`.
 2. Rename the project: `name` in [package.json](package.json), and the API
    `title` / `description` in [src/plugins/openapi.ts](src/plugins/openapi.ts).
-3. `cp .env.example .env` and set real values — at minimum `JWT_SECRET` and
-   `JWT_REFRESH_SECRET` (`openssl rand -hex 32`), `DATABASE_URL`, and a restricted
+3. `cp .env.example .env` and set real values — at minimum `JWT_SECRET`
+   (`openssl rand -hex 32`), `DATABASE_URL`, and a restricted
    `CORS_ORIGIN` for production. Set `SEED_ADMIN_*` if you'll seed an admin.
 4. `docker compose up -d` → `bun run db:migrate` → `bun run db:seed` (optional
    first admin) → `bun run dev`.

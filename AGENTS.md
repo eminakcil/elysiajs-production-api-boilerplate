@@ -8,7 +8,7 @@ to preserve Elysia's end-to-end type safety.
 
 ```bash
 bun install
-cp .env.example .env          # then set real JWT secrets (openssl rand -hex 32)
+cp .env.example .env          # then set a real JWT secret (openssl rand -hex 32)
 docker compose up -d          # local infra (Postgres + Redis) — the API runs on the host
 bun run db:migrate            # apply existing migrations
 bun run dev                   # http://localhost:3000 · docs at /openapi
@@ -125,9 +125,11 @@ not-found-route (404) and parse (400) are handled automatically.
 
 ## Auth
 
-- Two tokens: short-lived **access** (`JWT_ACCESS_EXP`, default 15m) and a
-  **rotating refresh** token (`JWT_REFRESH_EXP`, default 7d) persisted in
+- Two tokens: a short-lived **access JWT** (`JWT_ACCESS_EXP`, default 15m) and
+  a **rotating refresh** token (`JWT_REFRESH_EXP`, default 7d) persisted in
   `refresh_tokens` (only the SHA-256 **hash** is stored — see `lib/hash.ts`).
+  The refresh token is **not a JWT** — it's an opaque 256-bit random string
+  (`randomToken()` in `lib/hash.ts`); its validity lives entirely in the DB row.
 - `/auth/refresh` rotates the presented token: it's marked `used_at` (not
   deleted) and a new token is issued in the **same `family_id`**. The claim is a
   single conditional `UPDATE ... WHERE used_at IS NULL` so rotation is atomic —
@@ -135,9 +137,8 @@ not-found-route (404) and parse (400) are handled automatically.
   already-used token (a replay, or the loser of a concurrent rotation) is treated
   as theft → the whole family is revoked (401) and a `security.token_reuse_detected`
   audit event is written. Login/register start a new family; logout revokes by family.
-- **Every refresh token must carry a unique `jti`** (`crypto.randomUUID()`) when
-  signed. Without it, two tokens signed for the same user in the same second are
-  byte-identical and violate the `token` unique constraint.
+- Refresh tokens are minted with `randomToken()` (32 random bytes, base64url);
+  the entropy alone guarantees the `token` column's unique constraint.
 - **Forgotten password:** `POST /auth/password/request-reset` (enumeration-safe;
   always 200) emails a code; `POST /auth/password/reset` verifies it, rehashes
   the password and revokes all sessions. Logic in

@@ -2,9 +2,10 @@ import { Elysia } from "elysia";
 import { env } from "@/config/env";
 import { recordAudit } from "@/lib/audit";
 import { BadRequestError, UnauthorizedError } from "@/lib/errors";
+import { randomToken } from "@/lib/hash";
 import { clientIp } from "@/lib/ip";
 import { durationToMs } from "@/lib/time";
-import { authPlugin } from "@/plugins/auth";
+import { type AccessPayload, authPlugin } from "@/plugins/auth";
 import { ipRateLimit } from "@/plugins/rate-limit";
 import { authModel } from "./model";
 import { OtpService } from "./otp.service";
@@ -12,6 +13,31 @@ import { PasswordResetService } from "./password-reset.service";
 import { AuthService } from "./service";
 
 const REFRESH_MS = durationToMs(env.JWT_REFRESH_EXP) || durationToMs("7d");
+
+/**
+ * Sign an access JWT and mint + persist an opaque refresh token. Lives in the
+ * controller (not AuthService) because signing needs the request-scoped `jwt`
+ * from the auth plugin.
+ */
+async function issueTokens(
+  jwt: { sign: (payload: AccessPayload) => Promise<string> },
+  user: { id: string; email: string; role: "user" | "admin" },
+  familyId: string,
+) {
+  const accessToken = await jwt.sign({
+    sub: user.id,
+    email: user.email,
+    role: user.role,
+  });
+  const refreshToken = randomToken();
+  await AuthService.storeRefreshToken(
+    user.id,
+    refreshToken,
+    new Date(Date.now() + REFRESH_MS),
+    familyId,
+  );
+  return { accessToken, refreshToken };
+}
 
 const toPublicUser = (u: {
   id: string;
@@ -38,7 +64,7 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
   .model(authModel)
   .post(
     "/register",
-    async ({ body, jwt, refreshJwt, request, server }) => {
+    async ({ body, jwt, request, server }) => {
       const user = await AuthService.createUser(
         body.email,
         body.password,
@@ -52,24 +78,10 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
         ip: clientIp(request, server),
       });
 
-      const accessToken = await jwt.sign({
-        sub: user.id,
-        email: user.email,
-        role: user.role,
-      });
-      const refreshToken = await refreshJwt.sign({
-        sub: user.id,
-        jti: crypto.randomUUID(),
-      });
       // New login → new token family.
-      await AuthService.storeRefreshToken(
-        user.id,
-        refreshToken,
-        new Date(Date.now() + REFRESH_MS),
-        crypto.randomUUID(),
-      );
+      const tokens = await issueTokens(jwt, user, crypto.randomUUID());
 
-      return { accessToken, refreshToken, user: toPublicUser(user) };
+      return { ...tokens, user: toPublicUser(user) };
     },
     {
       body: "registerBody",
@@ -79,30 +91,16 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
   )
   .post(
     "/login",
-    async ({ body, jwt, refreshJwt }) => {
+    async ({ body, jwt }) => {
       const user = await AuthService.verifyCredentials(
         body.email,
         body.password,
       );
 
-      const accessToken = await jwt.sign({
-        sub: user.id,
-        email: user.email,
-        role: user.role,
-      });
-      const refreshToken = await refreshJwt.sign({
-        sub: user.id,
-        jti: crypto.randomUUID(),
-      });
       // New login → new token family.
-      await AuthService.storeRefreshToken(
-        user.id,
-        refreshToken,
-        new Date(Date.now() + REFRESH_MS),
-        crypto.randomUUID(),
-      );
+      const tokens = await issueTokens(jwt, user, crypto.randomUUID());
 
-      return { accessToken, refreshToken, user: toPublicUser(user) };
+      return { ...tokens, user: toPublicUser(user) };
     },
     {
       body: "loginBody",
@@ -112,35 +110,18 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
   )
   .post(
     "/refresh",
-    async ({ body, jwt, refreshJwt }) => {
-      const payload = await refreshJwt.verify(body.refreshToken);
-      if (!payload) throw new UnauthorizedError("Invalid refresh token");
-
+    async ({ body, jwt }) => {
       // Rotation with theft detection: marks the token used (or revokes the
-      // whole family on reuse) and returns its family id to continue the chain.
+      // whole family on reuse) and returns the row to continue the chain.
       const used = await AuthService.useRefreshToken(body.refreshToken);
 
-      const user = await AuthService.findById(payload.sub as string);
+      const user = await AuthService.findById(used.userId);
       if (!user) throw new UnauthorizedError();
 
-      const accessToken = await jwt.sign({
-        sub: user.id,
-        email: user.email,
-        role: user.role,
-      });
-      const refreshToken = await refreshJwt.sign({
-        sub: user.id,
-        jti: crypto.randomUUID(),
-      });
       // Same family — this token descends from the original login.
-      await AuthService.storeRefreshToken(
-        user.id,
-        refreshToken,
-        new Date(Date.now() + REFRESH_MS),
-        used.familyId,
-      );
+      const tokens = await issueTokens(jwt, user, used.familyId);
 
-      return { accessToken, refreshToken, user: toPublicUser(user) };
+      return { ...tokens, user: toPublicUser(user) };
     },
     {
       body: "refreshBody",
