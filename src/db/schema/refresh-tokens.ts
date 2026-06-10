@@ -5,7 +5,7 @@ export const refreshTokens = pgTable(
   "refresh_tokens",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    // SHA-256 hash of the signed refresh JWT (never the raw token).
+    // SHA-256 hash of the opaque refresh token (never the raw token).
     token: varchar("token", { length: 512 }).notNull().unique(),
     userId: uuid("user_id")
       .notNull()

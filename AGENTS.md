@@ -8,7 +8,7 @@ to preserve Elysia's end-to-end type safety.
 
 ```bash
 bun install
-cp .env.example .env          # then set real JWT secrets (openssl rand -hex 32)
+cp .env.example .env          # then set a real JWT secret (openssl rand -hex 32)
 docker compose up -d          # local infra (Postgres + Redis) — the API runs on the host
 bun run db:migrate            # apply existing migrations
 bun run dev                   # http://localhost:3000 · docs at /openapi
@@ -125,9 +125,12 @@ not-found-route (404) and parse (400) are handled automatically.
 
 ## Auth
 
-- Two tokens: short-lived **access** (`JWT_ACCESS_EXP`, default 15m) and a
-  **rotating refresh** token (`JWT_REFRESH_EXP`, default 7d) persisted in
+- Two tokens: a short-lived **access JWT** (claims: `sub` + `role` only —
+  no PII; `JWT_ACCESS_EXP`, default 15m) and
+  a **rotating refresh** token (`JWT_REFRESH_EXP`, default 7d) persisted in
   `refresh_tokens` (only the SHA-256 **hash** is stored — see `lib/hash.ts`).
+  The refresh token is **not a JWT** — it's an opaque 256-bit random string
+  (`randomToken()` in `lib/hash.ts`); its validity lives entirely in the DB row.
 - `/auth/refresh` rotates the presented token: it's marked `used_at` (not
   deleted) and a new token is issued in the **same `family_id`**. The claim is a
   single conditional `UPDATE ... WHERE used_at IS NULL` so rotation is atomic —
@@ -135,9 +138,20 @@ not-found-route (404) and parse (400) are handled automatically.
   already-used token (a replay, or the loser of a concurrent rotation) is treated
   as theft → the whole family is revoked (401) and a `security.token_reuse_detected`
   audit event is written. Login/register start a new family; logout revokes by family.
-- **Every refresh token must carry a unique `jti`** (`crypto.randomUUID()`) when
-  signed. Without it, two tokens signed for the same user in the same second are
-  byte-identical and violate the `token` unique constraint.
+- Refresh tokens are minted with `randomToken()` (32 random bytes, base64url);
+  the entropy alone guarantees the `token` column's unique constraint.
+- **Refresh-token transport** is set by `AUTH_TRANSPORT`: `bearer` (default —
+  the token travels in the JSON body) or `cookie` — login/register/refresh set
+  an httpOnly `refresh_token` cookie (`Path=/auth`, `SameSite=Strict`, `Secure`
+  in prod, `Max-Age` from `JWT_REFRESH_EXP`) and omit `refreshToken` from the
+  response body; `/auth/refresh` and `/auth/logout` read the cookie first and
+  fall back to the body, and validate the `Origin` header against `CORS_ORIGIN`
+  (403 on mismatch — see [lib/origin.ts](src/lib/origin.ts)). Access tokens and
+  the route guards stay bearer-based in both modes. In production, cookie mode
+  needs an explicit `CORS_ORIGIN` (the Origin check is disabled under `*`), and
+  cross-**site** frontends won't receive a `SameSite=Strict` cookie. Read
+  `env.AUTH_TRANSPORT` per request (inside handlers), never hoist it to a
+  module-level const — that's what lets tests exercise both modes.
 - **Forgotten password:** `POST /auth/password/request-reset` (enumeration-safe;
   always 200) emails a code; `POST /auth/password/reset` verifies it, rehashes
   the password and revokes all sessions. Logic in

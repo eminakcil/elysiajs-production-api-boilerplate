@@ -7,12 +7,11 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { type Operation, type Role, resolveScope } from "@/lib/permissions";
 
-/** Claims carried by an access token. */
-export interface AccessPayload {
+/** Claims carried by an access token — only what authorization needs. */
+export type AccessPayload = {
   sub: string;
-  email: string;
   role: Role;
-}
+};
 
 const UNAUTHORIZED = {
   error: "UNAUTHORIZED",
@@ -31,9 +30,10 @@ async function resolveUser(
 }
 
 /**
- * Auth plugin: two JWT signers (access + refresh), the bearer extractor, and
- * reusable guard macros. On success each macro adds a typed `user: AccessPayload`
- * to the context.
+ * Auth plugin: the access-token JWT signer, the bearer extractor, and
+ * reusable guard macros. (Refresh tokens are opaque random strings minted in
+ * the auth module — no signer needed.) On success each macro adds a typed
+ * `user: AccessPayload` to the context.
  *
  *   { isAuthed: true }                                  // any authenticated user
  *   { hasRole: 'admin' }                                // role gate
@@ -44,13 +44,6 @@ async function resolveUser(
  */
 export const authPlugin = new Elysia({ name: "auth" })
   .use(jwt({ name: "jwt", secret: env.JWT_SECRET, exp: env.JWT_ACCESS_EXP }))
-  .use(
-    jwt({
-      name: "refreshJwt",
-      secret: env.JWT_REFRESH_SECRET,
-      exp: env.JWT_REFRESH_EXP,
-    }),
-  )
   .use(bearer())
   .macro({
     isAuthed: {

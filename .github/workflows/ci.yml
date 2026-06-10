@@ -40,7 +40,6 @@ jobs:
       REDIS_URL: redis://localhost:6379
       QUEUE_DRIVER: sync
       JWT_SECRET: ci-secret-ci-secret-0123456789abcdef
-      JWT_REFRESH_SECRET: ci-refresh-secret-0123456789abcdef
 
     steps:
       - uses: actions/checkout@v4
