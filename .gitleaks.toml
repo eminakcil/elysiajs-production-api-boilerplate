@@ -1,0 +1,14 @@
+# Gitleaks config — picked up automatically by the CLI and gitleaks-action.
+# Extends the default ruleset; allowlists paths that hold intentional
+# non-secrets (test fixtures, CI fixtures, env templates).
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Intentional non-secrets"
+paths = [
+  '''^test/''',
+  '''^\.github/workflows/''',
+  '''\.env\.example$''',
+]

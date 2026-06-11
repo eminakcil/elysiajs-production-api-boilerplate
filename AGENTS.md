@@ -380,6 +380,9 @@ defined in [src/lib/permissions.ts](src/lib/permissions.ts).
 - Biome enforces formatting (2-space indent, double quotes, semicolons, 80 cols)
   and import organization. Run `bun run lint:fix` before committing; CI fails on
   lint errors.
+- CI also runs **gitleaks** (secret scanning, full history). Intentional
+  non-secrets (test/CI fixtures, `.env.example`) are allowlisted by path in
+  [.gitleaks.toml](.gitleaks.toml) — never allowlist a real secret; rotate it.
 - Use `import type` for type-only imports (`verbatimModuleSyntax` is on).
 - **Imports: use the `@/` alias** (`@/*` → `src/*`) for anything outside the
   current folder — no `../../` traversals. Keep `./sibling` relative for same-dir
