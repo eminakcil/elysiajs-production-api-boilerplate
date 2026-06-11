@@ -83,15 +83,14 @@ const toPublicUser = (u: {
 });
 
 /**
- * Auth controller. The Elysia instance *is* the controller (Elysia idiom).
- * Public: /register, /login, /refresh. Protected: /me, /logout.
+ * Credential routes carry a stricter per-IP limit than the rest of /auth —
+ * they're the brute-force and abuse targets (password guessing, registration
+ * spam + its OTP emails, reset-code guessing). Own keyspace so these counters
+ * can't collide with the module-wide limiter's.
  */
-export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
-  .use(authPlugin)
-  // Named "logger" — dedupes with the app-level use; here for the typed `log`.
+const credentialRoutes = new Elysia({ name: "auth-credentials" })
   .use(loggerPlugin)
-  // Per-IP limit on auth endpoints (brute-force / abuse protection).
-  .use(ipRateLimit({ max: 20, duration: 60_000 }))
+  .use(ipRateLimit({ max: 10, duration: 60_000, keyspace: "auth-cred" }))
   .model(authModel)
   .post(
     "/register",
@@ -163,6 +162,49 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
     },
   )
   .post(
+    "/password/request-reset",
+    async ({ body }) => {
+      // Always returns the same shape — never reveals whether the email exists.
+      await PasswordResetService.request(body.email);
+      return { sent: true };
+    },
+    {
+      body: "requestPasswordResetBody",
+      detail: {
+        summary: "Request a password-reset code by email",
+        tags: ["Auth"],
+      },
+    },
+  )
+  .post(
+    "/password/reset",
+    async ({ body }) => {
+      await PasswordResetService.reset(body.email, body.code, body.password);
+      return { reset: true };
+    },
+    {
+      body: "resetPasswordBody",
+      detail: {
+        summary: "Reset the password using an emailed code",
+        tags: ["Auth"],
+      },
+    },
+  );
+
+/**
+ * Auth controller. The Elysia instance *is* the controller (Elysia idiom).
+ * Public: /register, /login, /password/* (stricter rate limit — see
+ * credentialRoutes above) and /refresh. Protected: /me, /logout, /email/*.
+ */
+export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
+  .use(authPlugin)
+  // Named "logger" — dedupes with the app-level use; here for the typed `log`.
+  .use(loggerPlugin)
+  // Per-IP limit across the whole module (credential routes add a stricter one).
+  .use(ipRateLimit({ max: 20, duration: 60_000, keyspace: "auth" }))
+  .model(authModel)
+  .use(credentialRoutes)
+  .post(
     "/refresh",
     // Intentionally not gated by REQUIRE_VERIFIED_EMAIL: it authenticates via
     // the refresh token, and an unverified user must be able to stay logged in
@@ -192,35 +234,6 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
       response: "tokenResponse",
       detail: {
         summary: "Exchange a refresh token for new tokens",
-        tags: ["Auth"],
-      },
-    },
-  )
-  .post(
-    "/password/request-reset",
-    async ({ body }) => {
-      // Always returns the same shape — never reveals whether the email exists.
-      await PasswordResetService.request(body.email);
-      return { sent: true };
-    },
-    {
-      body: "requestPasswordResetBody",
-      detail: {
-        summary: "Request a password-reset code by email",
-        tags: ["Auth"],
-      },
-    },
-  )
-  .post(
-    "/password/reset",
-    async ({ body }) => {
-      await PasswordResetService.reset(body.email, body.code, body.password);
-      return { reset: true };
-    },
-    {
-      body: "resetPasswordBody",
-      detail: {
-        summary: "Reset the password using an emailed code",
         tags: ["Auth"],
       },
     },

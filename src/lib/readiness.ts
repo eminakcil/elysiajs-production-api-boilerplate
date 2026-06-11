@@ -1,34 +1,12 @@
 import { queryClient } from "@/db";
 import { redis } from "@/lib/cache";
 import { logger } from "@/lib/logger";
+import { withDeadline } from "@/lib/time";
+
+export { withDeadline };
 
 /** How long a single dependency ping may take before it counts as down. */
 const PING_TIMEOUT_MS = 2000;
-
-/**
- * Resolve `work`, or reject once the deadline passes. Needed because a ping
- * against a dead dependency doesn't necessarily reject: Bun's RedisClient
- * auto-reconnects and queues commands while disconnected, so `send()` simply
- * never settles — without a deadline both startup and /ready would hang.
- */
-export function withDeadline<T>(work: PromiseLike<T>, ms: number): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const timer = setTimeout(
-      () => reject(new Error(`timed out after ${ms}ms`)),
-      ms,
-    );
-    work.then(
-      (value) => {
-        clearTimeout(timer);
-        resolve(value);
-      },
-      (err) => {
-        clearTimeout(timer);
-        reject(err);
-      },
-    );
-  });
-}
 
 /**
  * Dependency pings shared by the /ready endpoint (plugins/health.ts) and the

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import { queryClient } from "@/db";
 import {
   type DependencyCheck,
   pingPostgres,
@@ -19,6 +20,15 @@ describe("readiness pings", () => {
 
   test("pingRedis returns true against the test redis", async () => {
     expect(await pingRedis()).toBe(true);
+  });
+});
+
+describe("postgres pool", () => {
+  // Runaway queries must be cancelled server-side — without statement_timeout
+  // a slow query holds its pool slot (and the request) until the client dies.
+  test("applies DB_STATEMENT_TIMEOUT to every connection", async () => {
+    const [row] = await queryClient`SHOW statement_timeout`;
+    expect(row?.statement_timeout).toBe("30s");
   });
 });
 

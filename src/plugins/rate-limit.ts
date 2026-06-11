@@ -6,6 +6,11 @@ import { RedisRateStore } from "./rate-limit-store";
 interface Opts {
   max?: number;
   duration?: number;
+  /**
+   * Counter namespace. Give every limiter its own — two limiters writing the
+   * same key would double-count each request.
+   */
+  keyspace?: string;
 }
 
 const tooMany = () =>
@@ -14,18 +19,25 @@ const tooMany = () =>
     { status: 429, headers: { "content-type": "application/json" } },
   );
 
+const store = (keyspace?: string) =>
+  new RedisRateStore({ prefix: keyspace ? `rl:${keyspace}` : "rl" });
+
 /**
  * Per-IP rate limit. Apply to a group/module: `.use(ipRateLimit({ max, duration }))`.
  * Good for public/auth endpoints (brute-force protection). Skipped in tests.
  */
-export const ipRateLimit = ({ max = 20, duration = 60_000 }: Opts = {}) =>
+export const ipRateLimit = ({
+  max = 20,
+  duration = 60_000,
+  keyspace,
+}: Opts = {}) =>
   rateLimit({
     scoping: "scoped",
     max,
     duration,
     headers: true,
     skip: () => isTest,
-    context: new RedisRateStore(),
+    context: store(keyspace),
     errorResponse: tooMany(),
     generator: (req, server) => `ip:${clientIp(req, server)}`,
   });
@@ -34,14 +46,18 @@ export const ipRateLimit = ({ max = 20, duration = 60_000 }: Opts = {}) =>
  * Per-user rate limit (for authenticated groups). Keys by the resolved user id
  * when available, else the bearer token, else the client IP.
  */
-export const userRateLimit = ({ max = 60, duration = 60_000 }: Opts = {}) =>
+export const userRateLimit = ({
+  max = 60,
+  duration = 60_000,
+  keyspace,
+}: Opts = {}) =>
   rateLimit({
     scoping: "scoped",
     max,
     duration,
     headers: true,
     skip: () => isTest,
-    context: new RedisRateStore(),
+    context: store(keyspace),
     errorResponse: tooMany(),
     // biome-ignore lint/suspicious/noExplicitAny: derived shape is plugin-defined
     generator: (req, server, derived: any) => {

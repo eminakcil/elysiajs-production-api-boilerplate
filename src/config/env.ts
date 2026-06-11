@@ -20,6 +20,10 @@ const EnvSchema = t.Object({
   DB_POOL_MAX: t.Number({ default: 10 }),
   DB_IDLE_TIMEOUT: t.Number({ default: 30 }), // seconds before an idle conn closes
   DB_CONNECT_TIMEOUT: t.Number({ default: 30 }), // seconds to wait for a connection
+  // Per-query timeout in ms (0 = disabled). Cancels runaway queries
+  // server-side so they can't hold a pool slot (and a request) indefinitely.
+  // Raise it if bulk maintenance jobs outgrow it — they share this pool.
+  DB_STATEMENT_TIMEOUT: t.Number({ default: 30_000 }),
 
   // Auth — access-token secret (keep it long and random in production).
   // Refresh tokens are opaque random strings, no signing secret needed.
@@ -78,6 +82,10 @@ const EnvSchema = t.Object({
   // Ops alert webhook (Slack/Discord/PagerDuty-compatible JSON POST). Fired on
   // critical events, e.g. a queue job exhausting its retries. Empty = disabled.
   ALERT_WEBHOOK_URL: t.String({ default: "" }),
+
+  // Days to keep audit_logs rows; older rows are purged daily by the worker.
+  // 0 = keep forever (the table grows unbounded — your compliance call).
+  AUDIT_RETENTION_DAYS: t.Number({ default: 90 }),
 
   // Admin user created by `bun run db:seed` (set a real password before running).
   SEED_ADMIN_EMAIL: t.String({ default: "admin@example.com" }),
