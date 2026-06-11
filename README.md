@@ -22,6 +22,7 @@ OpenAPI docs, tests, Docker and CI.
 - **Hardening:** boot-time dependency fail-fast, security headers, request body-size limit, per-query statement timeout, deadline-bounded Redis ops, configurable Postgres pool
 - **Docs:** OpenAPI at `/openapi`
 - **Quality:** Biome (lint + format), `bun test` (CI enforces an 80% coverage floor)
+- **Load testing:** k6 smoke journey in [load/](load/) (`BASE_URL`/`VUS`/`DURATION`-configurable)
 
 ## Quick start
 
