@@ -50,6 +50,9 @@ jobs:
 
       - run: bun install --frozen-lockfile
 
+      - name: Audit dependencies
+        run: bun audit --audit-level=high
+
       - name: Lint
         run: bun run lint
 

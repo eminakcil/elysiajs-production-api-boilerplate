@@ -237,6 +237,10 @@ not-found-route (404) and parse (400) are handled automatically.
   prod) via a global `onRequest`.
 - **Request limits:** `MAX_BODY_SIZE` (413 over it) and `REQUEST_IDLE_TIMEOUT`
   are passed to Bun.serve in [index.ts](src/index.ts).
+- **Query timeout:** `DB_STATEMENT_TIMEOUT` (default 30s, 0 = off) is sent as a
+  Postgres startup parameter ([db/index.ts](src/db/index.ts)) — the server
+  cancels runaway statements so they can't pin a pool slot and a request
+  indefinitely. Maintenance jobs share the pool; raise it if bulk work outgrows it.
 
 ## Audit log
 
@@ -248,11 +252,18 @@ client IP; service-level calls record without it. Existing events:
 `user.created`, `user.role_changed`, `user.deleted`, `auth.password_reset`,
 `security.token_reuse_detected`.
 
+**Retention:** rows older than `AUDIT_RETENTION_DAYS` (default 90; 0 = keep
+forever) are purged daily by the `audit-retention` maintenance queue
+(`deleteOldAuditLogs`, scheduled in [worker.ts](src/worker.ts)).
+
 ## Caching (Redis)
 
 - Bun's built-in `RedisClient` via [src/lib/cache.ts](src/lib/cache.ts) — no extra
   dependency. Import the `cache` helper (`get/set(key,val,ttl?)/del/incr/expire/
   exists`); it's reusable, not OTP-specific.
+- Every `cache` op is **deadline-bounded (2s)**: while Redis is down the client
+  queues commands indefinitely, so unbounded calls would hang requests. Bounded
+  ops reject promptly instead — callers keep their normal error paths.
 - Key convention: `"<domain>:<name>:<id>"` (e.g. `otp:verify:<userId>`).
 - `REDIS_URL` env (default `redis://localhost:6379`); Redis runs in
   `docker compose up -d`. The client is closed on graceful shutdown.
@@ -327,11 +338,19 @@ defined in [src/lib/permissions.ts](src/lib/permissions.ts).
   ([plugins/rate-limit-store.ts](src/plugins/rate-limit-store.ts)) so counters are
   shared across API replicas. Opt-in per group: `.use(ipRateLimit({ max, duration }))`
   or `.use(userRateLimit({ max, duration }))` ([plugins/rate-limit.ts](src/plugins/rate-limit.ts)).
+- **Always pass a distinct `keyspace`** when stacking limiters — two limiters
+  writing the same Redis key would double-count every request. The store
+  **fails open** (allow + warn log, 2s deadline per op) so a Redis outage
+  degrades to "unlimited" instead of hanging requests or returning global 429s.
 - `ipRateLimit` keys by client IP (auth/public endpoints); `userRateLimit` keys by
   the resolved user id, falling back to the bearer token, then IP. `RateLimit-*`
-  headers are set automatically; over-limit returns 429 `{ error: "RATE_LIMITED" }`.
-- Applied to the auth module (per-IP) and user module (per-user). **Skipped in
-  tests** (`skip: () => isTest`) so the suite isn't throttled.
+  headers are set automatically; over-limit returns 429 `{ error: "RATE_LIMITED" }`
+  with a `Retry-After` header.
+- Applied to the auth module (per-IP, 20/min) and user module (per-user, 60/min).
+  The **credential routes** (`/auth/register`, `/auth/login`, `/auth/password/*`)
+  sit in their own sub-instance with a stricter 10/min-per-IP limit — they're the
+  brute-force/spam targets. **Skipped in tests** (`skip: () => isTest`) so the
+  suite isn't throttled.
 - Client IP via [lib/ip.ts](src/lib/ip.ts) — set `TRUST_PROXY=true` behind a
   proxy/LB to read `X-Forwarded-For`, otherwise everyone shares the proxy's IP.
 

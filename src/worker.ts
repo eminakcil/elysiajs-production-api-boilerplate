@@ -2,6 +2,8 @@ import { logger } from "./lib/logger";
 import { waitForDependencies } from "./lib/readiness";
 import { emailQueue } from "./queue/email.queue";
 import {
+  AUDIT_RETENTION_INTERVAL_MS,
+  auditRetentionQueue,
   TOKEN_CLEANUP_INTERVAL_MS,
   tokenCleanupQueue,
 } from "./queue/maintenance.queue";
@@ -19,15 +21,24 @@ try {
   process.exit(1);
 }
 
-const workers = [startWorker(emailQueue), startWorker(tokenCleanupQueue)];
+const workers = [
+  startWorker(emailQueue),
+  startWorker(tokenCleanupQueue),
+  startWorker(auditRetentionQueue),
+];
 
 // Register recurring maintenance (idempotent — BullMQ dedupes the schedule).
 await scheduleRepeatable(tokenCleanupQueue, undefined, {
   every: TOKEN_CLEANUP_INTERVAL_MS,
 });
+await scheduleRepeatable(auditRetentionQueue, undefined, {
+  every: AUDIT_RETENTION_INTERVAL_MS,
+});
 
 logger.info(
-  { queues: [emailQueue.name, tokenCleanupQueue.name] },
+  {
+    queues: [emailQueue.name, tokenCleanupQueue.name, auditRetentionQueue.name],
+  },
   "🛠️  worker ready",
 );
 
