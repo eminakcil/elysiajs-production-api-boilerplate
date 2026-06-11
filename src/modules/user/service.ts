@@ -1,7 +1,11 @@
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { BadRequestError, NotFoundError } from "@/lib/errors";
+import { AuthService } from "@/modules/auth/service";
+
+/** Soft delete: every read/write path must exclude deleted rows. */
+const notDeleted = isNull(users.deletedAt);
 
 /** Columns safe to expose publicly — note the password hash is never selected. */
 const publicColumns = {
@@ -40,7 +44,7 @@ export abstract class UserService {
     const rows = await db
       .select(publicColumns)
       .from(users)
-      .where(ownerId ? eq(users.id, ownerId) : undefined)
+      .where(ownerId ? and(eq(users.id, ownerId), notDeleted) : notDeleted)
       .limit(limit)
       .offset(offset);
     return rows.map(toPublic);
@@ -50,7 +54,7 @@ export abstract class UserService {
     const [user] = await db
       .select(publicColumns)
       .from(users)
-      .where(eq(users.id, id))
+      .where(and(eq(users.id, id), notDeleted))
       .limit(1);
     if (!user) throw new NotFoundError("User not found");
     return toPublic(user);
@@ -66,18 +70,27 @@ export abstract class UserService {
     const [user] = await db
       .update(users)
       .set(data)
-      .where(eq(users.id, id))
+      .where(and(eq(users.id, id), notDeleted))
       .returning(publicColumns);
     if (!user) throw new NotFoundError("User not found");
     return toPublic(user);
   }
 
+  /**
+   * Soft delete: mark the row (the partial unique index releases the email
+   * for re-registration) and revoke every session. The row itself is kept —
+   * audit history and FKs stay intact.
+   */
   static async remove(id: string) {
     const [deleted] = await db
-      .delete(users)
-      .where(eq(users.id, id))
+      .update(users)
+      .set({ deletedAt: new Date() })
+      .where(and(eq(users.id, id), notDeleted))
       .returning({ id: users.id });
     if (!deleted) throw new NotFoundError("User not found");
+
+    // A deleted account must not keep live sessions.
+    await AuthService.revokeAllRefreshTokens(id);
     return { success: true };
   }
 }

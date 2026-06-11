@@ -1,5 +1,5 @@
 import { bearer } from "@elysiajs/bearer";
-import { eq } from "drizzle-orm";
+import { and, eq, isNull } from "drizzle-orm";
 import { Elysia } from "elysia";
 import { env } from "@/config/env";
 import { db } from "@/db";
@@ -27,12 +27,16 @@ async function resolveUser(
   return verifyAccessToken(bearer);
 }
 
-/** Fresh DB check — emailVerifiedAt is never carried in the JWT. */
+/**
+ * Fresh DB check — emailVerifiedAt is never carried in the JWT. Soft-deleted
+ * accounts fail the check (no row), so with REQUIRE_VERIFIED_EMAIL on they
+ * are cut off immediately instead of riding out the JWT's lifetime.
+ */
 async function isEmailVerified(userId: string): Promise<boolean> {
   const [row] = await db
     .select({ emailVerifiedAt: users.emailVerifiedAt })
     .from(users)
-    .where(eq(users.id, userId))
+    .where(and(eq(users.id, userId), isNull(users.deletedAt)))
     .limit(1);
   return !!row?.emailVerifiedAt;
 }

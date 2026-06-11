@@ -19,6 +19,9 @@ async function getDummyHash(): Promise<string> {
   return dummyHash;
 }
 
+/** Soft delete: auth must never see deleted accounts. */
+const notDeleted = isNull(users.deletedAt);
+
 /**
  * Request-independent auth logic: password hashing and all database access.
  * Access-token signing and refresh-token minting live in `issueTokens` in the
@@ -27,10 +30,12 @@ async function getDummyHash(): Promise<string> {
  */
 export abstract class AuthService {
   static async createUser(email: string, password: string, name?: string) {
+    // Only ACTIVE accounts block the address — a soft-deleted user's email
+    // can be re-registered (enforced by the partial unique index too).
     const existing = await db
       .select({ id: users.id })
       .from(users)
-      .where(eq(users.email, email))
+      .where(and(eq(users.email, email), notDeleted))
       .limit(1);
     if (existing.length > 0)
       throw new ConflictError("Email already registered");
@@ -47,7 +52,7 @@ export abstract class AuthService {
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.id, id))
+      .where(and(eq(users.id, id), notDeleted))
       .limit(1);
     return user;
   }
@@ -56,7 +61,7 @@ export abstract class AuthService {
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.email, email))
+      .where(and(eq(users.email, email), notDeleted))
       .limit(1);
     return user;
   }
@@ -85,7 +90,7 @@ export abstract class AuthService {
     const [user] = await db
       .select()
       .from(users)
-      .where(eq(users.email, email))
+      .where(and(eq(users.email, email), notDeleted))
       .limit(1);
 
     if (!user) {
