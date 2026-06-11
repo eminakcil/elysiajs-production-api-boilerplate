@@ -110,6 +110,9 @@ process exits on missing/invalid values). To add a variable:
   covered; raise the floor as coverage improves. Use the **object** form
   (`{ line, function, statement }`) — Bun enforces a bare number per-file, which
   infra files (e.g. `logger.ts`) can never satisfy; the object form is total.
+- **Load tests:** `k6 run load/api-journey.k6.js` (see [load/README.md](load/README.md)).
+  The default profile stays under the per-IP rate limits — read that README
+  before scaling `VUS` up.
 
 ## Error responses
 
@@ -243,6 +246,18 @@ not-found-route (404) and parse (400) are handled automatically.
 - **Metrics:** `/metrics` exposes Prometheus text (default process metrics, HTTP
   request counter + duration histogram labelled by **matched route**, queue depth
   gauge). Unauthenticated — keep it internal. See [plugins/metrics.ts](src/plugins/metrics.ts).
+- **Tracing:** opt-in OpenTelemetry via `OTEL_ENABLED=true`
+  ([plugins/otel.ts](src/plugins/otel.ts)) — request spans exported over
+  OTLP/HTTP to `OTEL_EXPORTER_OTLP_ENDPOINT` (collector/Jaeger/Tempo),
+  `OTEL_SERVICE_NAME` names the service. The plugin sits **first** in app.ts so
+  spans wrap everything; when disabled it's an inert named plugin. The request
+  logger binds the active `traceId` next to `requestId`, linking logs to
+  traces. API process only — the worker isn't traced.
+  **Local dev:** `docker compose --profile tracing up -d` adds a Jaeger
+  all-in-one on the default endpoint — set `OTEL_ENABLED=true` in `.env` and
+  open http://localhost:16686. In `docker-compose.prod.yml`, point
+  `OTEL_EXPORTER_OTLP_ENDPOINT` at your collector (a container's `localhost`
+  is itself).
 - **Security headers:** [plugins/security-headers.ts](src/plugins/security-headers.ts)
   sets nosniff / frame-deny / referrer-policy / CORP on every response (HSTS in
   prod) via a global `onRequest`.
@@ -307,6 +322,12 @@ forever) are purged daily by the `audit-retention` maintenance queue
 - **Don't call `mailer.send` from request handlers** — enqueue instead:
   `emailQueue.add({ to, subject, text })`. Only the worker (or the sync driver)
   delivers.
+- **Templates:** transactional mail is built in
+  [lib/mail-templates.ts](src/lib/mail-templates.ts) — a shared branded HTML
+  wrapper (`renderEmailHtml`, inline styles, everything escaped, `APP_NAME` in
+  the header) plus one builder per mail returning a `Mail` with both `text`
+  and `html`. Keep `text` the source of truth (tests read codes from it); add
+  new mails as builders here, not inline in services.
 
 ## Queues (BullMQ)
 
@@ -406,6 +427,9 @@ defined in [src/lib/permissions.ts](src/lib/permissions.ts).
 - Biome enforces formatting (2-space indent, double quotes, semicolons, 80 cols)
   and import organization. Run `bun run lint:fix` before committing; CI fails on
   lint errors.
+- CI also runs **gitleaks** (secret scanning, full history). Intentional
+  non-secrets (test/CI fixtures, `.env.example`) are allowlisted by path in
+  [.gitleaks.toml](.gitleaks.toml) — never allowlist a real secret; rotate it.
 - Use `import type` for type-only imports (`verbatimModuleSyntax` is on).
 - **Imports: use the `@/` alias** (`@/*` → `src/*`) for anything outside the
   current folder — no `../../` traversals. Keep `./sibling` relative for same-dir
