@@ -7,6 +7,7 @@ import { clientIp } from "@/lib/ip";
 import { assertTrustedOrigin } from "@/lib/origin";
 import { durationToMs } from "@/lib/time";
 import { type AccessPayload, authPlugin } from "@/plugins/auth";
+import { loggerPlugin } from "@/plugins/logger";
 import { ipRateLimit } from "@/plugins/rate-limit";
 import { authModel } from "./model";
 import { OtpService } from "./otp.service";
@@ -87,12 +88,14 @@ const toPublicUser = (u: {
  */
 export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
   .use(authPlugin)
+  // Named "logger" — dedupes with the app-level use; here for the typed `log`.
+  .use(loggerPlugin)
   // Per-IP limit on auth endpoints (brute-force / abuse protection).
   .use(ipRateLimit({ max: 20, duration: 60_000 }))
   .model(authModel)
   .post(
     "/register",
-    async ({ body, jwt, request, server, cookie: { refresh_token } }) => {
+    async ({ body, jwt, request, server, cookie: { refresh_token }, log }) => {
       const user = await AuthService.createUser(
         body.email,
         body.password,
@@ -105,6 +108,19 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
         targetId: user.id,
         ip: clientIp(request, server),
       });
+
+      if (env.REQUIRE_VERIFIED_EMAIL) {
+        // Best-effort: a Redis/queue hiccup must not fail registration — the
+        // user can always hit /auth/email/request-otp again.
+        try {
+          await OtpService.issue(user.id, user.email);
+        } catch (err) {
+          log.warn(
+            { err, userId: user.id },
+            "failed to auto-issue verification OTP",
+          );
+        }
+      }
 
       // New login → new token family.
       const tokens = await issueTokens(
@@ -150,6 +166,9 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
   )
   .post(
     "/refresh",
+    // Intentionally not gated by REQUIRE_VERIFIED_EMAIL: it authenticates via
+    // the refresh token, and an unverified user must be able to stay logged in
+    // long enough to complete verification.
     async ({ body, jwt, cookie: { refresh_token } }) => {
       const presented =
         (env.AUTH_TRANSPORT === "cookie" ? refresh_token.value : undefined) ??
@@ -216,7 +235,9 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
       return toPublicUser(current);
     },
     {
-      isAuthed: true,
+      // Exempt from REQUIRE_VERIFIED_EMAIL — frontends poll verification
+      // status from here (`emailVerified`).
+      isAuthed: "allowUnverified",
       response: "publicUser",
       detail: {
         summary: "Get the current user",
@@ -242,7 +263,8 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
       return { success: true };
     },
     {
-      isAuthed: true,
+      // Exempt from REQUIRE_VERIFIED_EMAIL — logging out is always allowed.
+      isAuthed: "allowUnverified",
       beforeHandle: requireTrustedOrigin,
       body: "refreshBody",
       cookie: "refreshCookie",
@@ -265,7 +287,8 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
       return { sent: true };
     },
     {
-      isAuthed: true,
+      // Exempt from REQUIRE_VERIFIED_EMAIL — this IS the verification flow.
+      isAuthed: "allowUnverified",
       detail: {
         summary: "Send an email-verification OTP to the current user",
         tags: ["Auth"],
@@ -283,7 +306,8 @@ export const authModule = new Elysia({ prefix: "/auth", tags: ["Auth"] })
       return { verified: true };
     },
     {
-      isAuthed: true,
+      // Exempt from REQUIRE_VERIFIED_EMAIL — this IS the verification flow.
+      isAuthed: "allowUnverified",
       body: "verifyOtpBody",
       detail: {
         summary: "Verify the email-verification OTP",

@@ -5,6 +5,12 @@ import { db } from "@/db";
 import { users } from "@/db/schema";
 import { mailer } from "@/lib/mailer";
 
+// Normalize the auth variants so the suite is deterministic regardless of the
+// local .env (same spirit as QUEUE_DRIVER being forced to "sync" in tests).
+// Variant-specific describes opt in explicitly via setEnv below.
+env.AUTH_TRANSPORT = "bearer";
+env.REQUIRE_VERIFIED_EMAIL = false;
+
 /** Fire a request at the app in-process (no network) and get the Response. */
 export const api = (path: string, init?: RequestInit) =>
   app.handle(new Request(`http://localhost${path}`, init));
@@ -65,15 +71,24 @@ const auth = (token: string) => ({ Authorization: `Bearer ${token}` });
 export const lastOtp = (email: string): string | undefined =>
   mailer.lastTo(email)?.text.match(/\b(\d{6})\b/)?.[1];
 
+/**
+ * Verify using the most recently emailed code — for REQUIRE_VERIFIED_EMAIL
+ * flows where register auto-sends the OTP (calling request-otp again would
+ * hit the 60s resend cooldown).
+ */
+export async function verifyEmailFromOutbox(token: string, email: string) {
+  const code = lastOtp(email);
+  if (!code) throw new Error("no OTP code was emailed");
+  return json("/auth/email/verify", "POST", { code }, token);
+}
+
 /** Run the full email-verification flow for a user with a valid access token. */
 export async function verifyEmail(token: string, email: string) {
   await api("/auth/email/request-otp", {
     method: "POST",
     headers: auth(token),
   });
-  const code = lastOtp(email);
-  if (!code) throw new Error("no OTP code was emailed");
-  return json("/auth/email/verify", "POST", { code }, token);
+  return verifyEmailFromOutbox(token, email);
 }
 
 /** Promote a user to the admin role directly in the database. */
