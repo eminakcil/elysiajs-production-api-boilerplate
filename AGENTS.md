@@ -110,6 +110,9 @@ process exits on missing/invalid values). To add a variable:
   covered; raise the floor as coverage improves. Use the **object** form
   (`{ line, function, statement }`) — Bun enforces a bare number per-file, which
   infra files (e.g. `logger.ts`) can never satisfy; the object form is total.
+- **Load tests:** `k6 run load/api-journey.k6.js` (see [load/README.md](load/README.md)).
+  The default profile stays under the per-IP rate limits — read that README
+  before scaling `VUS` up.
 
 ## Error responses
 
