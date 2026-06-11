@@ -232,6 +232,13 @@ not-found-route (404) and parse (400) are handled automatically.
 - **Metrics:** `/metrics` exposes Prometheus text (default process metrics, HTTP
   request counter + duration histogram labelled by **matched route**, queue depth
   gauge). Unauthenticated — keep it internal. See [plugins/metrics.ts](src/plugins/metrics.ts).
+- **Tracing:** opt-in OpenTelemetry via `OTEL_ENABLED=true`
+  ([plugins/otel.ts](src/plugins/otel.ts)) — request spans exported over
+  OTLP/HTTP to `OTEL_EXPORTER_OTLP_ENDPOINT` (collector/Jaeger/Tempo),
+  `OTEL_SERVICE_NAME` names the service. The plugin sits **first** in app.ts so
+  spans wrap everything; when disabled it's an inert named plugin. The request
+  logger binds the active `traceId` next to `requestId`, linking logs to
+  traces. API process only — the worker isn't traced.
 - **Security headers:** [plugins/security-headers.ts](src/plugins/security-headers.ts)
   sets nosniff / frame-deny / referrer-policy / CORP on every response (HSTS in
   prod) via a global `onRequest`.
