@@ -256,6 +256,21 @@ client IP; service-level calls record without it. Existing events:
 forever) are purged daily by the `audit-retention` maintenance queue
 (`deleteOldAuditLogs`, scheduled in [worker.ts](src/worker.ts)).
 
+## Soft delete (users)
+
+- `DELETE /users/:id` **marks** the row (`deleted_at`) instead of removing it —
+  history and FKs stay intact — and revokes every refresh token. The email is
+  released for re-registration by a **partial unique index**
+  (`users_email_active_unique ... WHERE deleted_at IS NULL`); there is no
+  column-level unique on `email` anymore.
+- **Every read path must filter deleted rows** — use the `notDeleted`
+  (`isNull(users.deletedAt)`) condition like the user/auth services do. A
+  missed filter resurrects deleted accounts.
+- A deleted user's outstanding **access JWT** stays cryptographically valid for
+  up to `JWT_ACCESS_EXP` (15m), but every DB-backed path (`/auth/me`, refresh,
+  the `REQUIRE_VERIFIED_EMAIL` gate) rejects immediately. Same trade-off as
+  role changes — the JWT carries no revocation state.
+
 ## Caching (Redis)
 
 - Bun's built-in `RedisClient` via [src/lib/cache.ts](src/lib/cache.ts) — no extra

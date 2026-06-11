@@ -88,7 +88,7 @@ queue uses an inline "sync" driver, so no worker/Redis is needed.
 - `POST /auth/password/request-reset` · `POST /auth/password/reset` — public (forgotten password)
 - `GET /auth/me` · `POST /auth/logout` — authenticated
 - `POST /auth/email/request-otp` · `POST /auth/email/verify` — authenticated (email verification via OTP)
-- `GET /users` · `GET /users/:id` · `PATCH`/`DELETE /users/:id` — permission-gated (self or admin; role changes admin-only)
+- `GET /users` · `GET /users/:id` · `PATCH`/`DELETE /users/:id` — permission-gated (self or admin; role changes admin-only; DELETE is a soft delete that revokes sessions and frees the email)
 
 Authenticate by sending `Authorization: Bearer <accessToken>`. With
 `AUTH_TRANSPORT=cookie` the refresh token moves to an httpOnly cookie
