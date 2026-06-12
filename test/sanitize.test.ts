@@ -48,7 +48,7 @@ describe("sanitizedString length is validated after sanitization", () => {
   it("rejects input that is empty after sanitization when minLength is set", () => {
     const schema = sanitizedString({ minLength: 1, maxLength: 100 });
     expect(() => Value.Decode(schema, "<script></script>")).toThrow();
-    expect(() => Value.Decode(schema, "   ")).toThrow();
+    expect(() => Value.Decode(schema, "   ")).toThrow(); // sanitizeText calls .trim(), so whitespace collapses to "" which then fails minLength
   });
 
   it("accepts HTML-wrapped input whose sanitized length fits maxLength", () => {
@@ -69,5 +69,17 @@ describe("sanitizedString length is validated after sanitization", () => {
   it("accepts ordinary text within bounds", () => {
     const schema = sanitizedString({ minLength: 1, maxLength: 100 });
     expect(Value.Decode(schema, "<b>hi</b>")).toBe("hi");
+  });
+
+  it("rejects a name longer than maxLength after sanitization with a 400", async () => {
+    const res = await json("/auth/register", "POST", {
+      email: uniqueEmail(),
+      password: "supersecret",
+      name: "a".repeat(300),
+    });
+    expect(res.status).toBe(400);
+    const err = await body(res);
+    expect(err.error).toBe("BAD_REQUEST");
+    expect(err.message).toContain("255");
   });
 });

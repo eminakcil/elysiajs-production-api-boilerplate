@@ -27,6 +27,9 @@ const RAW_MAX_LENGTH = 64 * 1024;
  * Length is checked on the SANITIZED output, not the raw input — stripping HTML
  * changes the length, so validating the raw string would accept values that
  * sanitize to empty and reject values whose real text fits.
+ *
+ * Note: `maxLength` is implicitly capped by RAW_MAX_LENGTH (65536) — a caller
+ * passing a larger maxLength would see the raw cap reject oversized input first.
  */
 export const sanitizedString = (opts?: {
   minLength?: number;
