@@ -123,8 +123,10 @@ describe("user authorization (permission model)", () => {
 describe("list pagination is deterministic", () => {
   it("returns a stable, non-overlapping order across pages", async () => {
     const admin = await registerUser({ admin: true });
-    // Seed a handful of users so paging has something to split.
-    for (let i = 0; i < 5; i++) await registerUser();
+    const createdIds = [admin.id];
+    // Seed extra users so paging spans multiple pages; the test's users are
+    // the newest rows, so they sort to the top of the createdAt-desc listing.
+    for (let i = 0; i < 5; i++) createdIds.push((await registerUser()).id);
 
     const page = (limit: number, offset: number) =>
       json(
@@ -135,16 +137,19 @@ describe("list pagination is deterministic", () => {
       ).then(body);
 
     const all = await page(100, 0);
-    const ids = all.map((u: { id: string }) => u.id);
+    const topIds = all
+      .map((u: { id: string }) => u.id)
+      .slice(0, createdIds.length);
 
-    // No duplicates within a single full listing.
-    expect(new Set(ids).size).toBe(ids.length);
+    // The newest `createdIds.length` rows are exactly this test's users.
+    expect(new Set(topIds)).toEqual(new Set(createdIds));
+    // No duplicates across the page boundary within that range.
+    expect(new Set(topIds).size).toBe(topIds.length);
 
-    // Two halves stitched together equal the full ordered listing — proves a
-    // total, stable order (no skips, no repeats across the offset boundary).
+    // Stitching two consecutive pages reproduces the same order — no skips/repeats.
     const first = await page(3, 0);
     const second = await page(3, 3);
     const stitched = [...first, ...second].map((u: { id: string }) => u.id);
-    expect(stitched).toEqual(ids.slice(0, stitched.length));
+    expect(stitched).toEqual(topIds);
   });
 });
