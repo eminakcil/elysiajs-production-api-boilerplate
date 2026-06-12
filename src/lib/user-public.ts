@@ -1,4 +1,4 @@
-import { t } from "elysia";
+import { type Static, t } from "elysia";
 import { dbSchema } from "@/db/model";
 
 // Schema-derived columns are the single source of truth (see db/model.ts).
@@ -32,7 +32,9 @@ type PublicUserInput = {
  * so it is safe to pass a full DB row — secrets like the password hash are not
  * carried through.
  */
-export const toPublicUser = (u: PublicUserInput) => ({
+export const toPublicUser = (
+  u: PublicUserInput,
+): Static<typeof publicUser> => ({
   id: u.id,
   email: u.email,
   name: u.name,
