@@ -1,4 +1,4 @@
-import { logger } from "./lib/logger";
+import { closeLogger, logger } from "./lib/logger";
 import { waitForDependencies } from "./lib/readiness";
 import { emailQueue } from "./queue/email.queue";
 import {
@@ -45,6 +45,8 @@ logger.info(
 const shutdown = async (signal: string) => {
   logger.info({ signal }, "shutting down worker");
   await Promise.all(workers.map((w) => w.close()));
+  // Flush buffered file logs before exit.
+  await closeLogger();
   process.exit(0);
 };
 
