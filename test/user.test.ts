@@ -1,5 +1,5 @@
 import { beforeAll, describe, expect, it } from "bun:test";
-import { api, body, json, registerUser } from "./helpers";
+import { api, body, json, registerUser, uniqueEmail } from "./helpers";
 
 describe("user authorization (permission model)", () => {
   let userA: Awaited<ReturnType<typeof registerUser>>;
@@ -117,6 +117,34 @@ describe("user authorization (permission model)", () => {
       headers: { Authorization: `Bearer ${userA.accessToken}` },
     });
     expect(res.status).toBe(200);
+  });
+});
+
+describe("public user shape is consistent across modules", () => {
+  const PUBLIC_KEYS = [
+    "id",
+    "email",
+    "name",
+    "role",
+    "emailVerified",
+    "createdAt",
+  ].sort();
+
+  it("auth /register returns the full public-user shape including createdAt", async () => {
+    const res = await json("/auth/register", "POST", {
+      email: uniqueEmail(),
+      password: "supersecret",
+    });
+    const { user } = await body(res);
+    expect(Object.keys(user).sort()).toEqual(PUBLIC_KEYS);
+    expect(user.createdAt).toBeDefined();
+  });
+
+  it("users /:id returns the same shape", async () => {
+    const u = await registerUser();
+    const res = await json(`/users/${u.id}`, "GET", undefined, u.accessToken);
+    const dto = await body(res);
+    expect(Object.keys(dto).sort()).toEqual(PUBLIC_KEYS);
   });
 });
 
