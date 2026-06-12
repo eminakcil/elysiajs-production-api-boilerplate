@@ -51,6 +51,17 @@ const EnvSchema = t.Object({
 
   // Log level: trace | debug | info | warn | error | fatal | silent.
   LOG_LEVEL: t.String({ default: "info" }),
+  // File logging with rotation (lib/logger.ts). Production writes JSON to a
+  // rotated file only; development writes to both the console and the file;
+  // tests stay silent (no file). Files rotate daily (LOG_ROTATE_INTERVAL) or
+  // when they pass LOG_ROTATE_SIZE — whichever comes first — and LOG_MAX_FILES
+  // rotated files are kept (gzipped when LOG_COMPRESS).
+  LOG_DIR: t.String({ default: "logs" }),
+  LOG_FILE: t.String({ default: "app.log" }),
+  LOG_ROTATE_SIZE: t.String({ default: "20M" }),
+  LOG_ROTATE_INTERVAL: t.String({ default: "1d" }),
+  LOG_MAX_FILES: t.Number({ default: 14 }),
+  LOG_COMPRESS: t.Boolean({ default: true }),
 
   // Distributed tracing (OpenTelemetry). When enabled, request spans are
   // exported over OTLP/HTTP to the endpoint below (collector/Jaeger/Tempo).
