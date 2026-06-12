@@ -2,7 +2,7 @@ import { app } from "./app";
 import { env } from "./config/env";
 import { queryClient } from "./db";
 import { redis } from "./lib/cache";
-import { logger } from "./lib/logger";
+import { closeLogger, logger } from "./lib/logger";
 import { waitForDependencies } from "./lib/readiness";
 import { emailQueue } from "./queue/email.queue";
 
@@ -39,6 +39,8 @@ const shutdown = async (signal: string) => {
   redis.close();
   // Close queue producers (no-op in sync mode).
   await emailQueue.bull?.close();
+  // Flush buffered file logs last, after the final log line above.
+  await closeLogger();
   process.exit(0);
 };
 
