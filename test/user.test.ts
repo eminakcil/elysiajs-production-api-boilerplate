@@ -119,3 +119,32 @@ describe("user authorization (permission model)", () => {
     expect(res.status).toBe(200);
   });
 });
+
+describe("list pagination is deterministic", () => {
+  it("returns a stable, non-overlapping order across pages", async () => {
+    const admin = await registerUser({ admin: true });
+    // Seed a handful of users so paging has something to split.
+    for (let i = 0; i < 5; i++) await registerUser();
+
+    const page = (limit: number, offset: number) =>
+      json(
+        `/users?limit=${limit}&offset=${offset}`,
+        "GET",
+        undefined,
+        admin.accessToken,
+      ).then(body);
+
+    const all = await page(100, 0);
+    const ids = all.map((u: { id: string }) => u.id);
+
+    // No duplicates within a single full listing.
+    expect(new Set(ids).size).toBe(ids.length);
+
+    // Two halves stitched together equal the full ordered listing — proves a
+    // total, stable order (no skips, no repeats across the offset boundary).
+    const first = await page(3, 0);
+    const second = await page(3, 3);
+    const stitched = [...first, ...second].map((u: { id: string }) => u.id);
+    expect(stitched).toEqual(ids.slice(0, stitched.length));
+  });
+});

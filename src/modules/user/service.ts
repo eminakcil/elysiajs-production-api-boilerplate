@@ -1,4 +1,4 @@
-import { and, eq, isNull } from "drizzle-orm";
+import { and, desc, eq, isNull } from "drizzle-orm";
 import { db } from "@/db";
 import { users } from "@/db/schema";
 import { BadRequestError, NotFoundError } from "@/lib/errors";
@@ -45,6 +45,7 @@ export abstract class UserService {
       .select(publicColumns)
       .from(users)
       .where(ownerId ? and(eq(users.id, ownerId), notDeleted) : notDeleted)
+      .orderBy(desc(users.createdAt), users.id)
       .limit(limit)
       .offset(offset);
     return rows.map(toPublic);
